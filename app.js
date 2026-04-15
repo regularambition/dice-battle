@@ -4,7 +4,8 @@ import {
   doc,
   updateDoc,
   onSnapshot,
-  getDoc
+  getDoc,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
@@ -13,6 +14,65 @@ import {
 
 let uid = null;
 let currentRoomData = null;
+let isAuthChecked = false;
+let playerName = null;
+
+function showScreen(screenId) {
+  const screens = ["screen-title", "screen-name", "screen-menu"];
+
+  screens.forEach(id => {
+    document.getElementById(id).style.display = "none";
+  });
+
+  document.getElementById(screenId).style.display = "block";
+}
+
+window.onload = () => {
+  showScreen("screen-title");
+};
+
+document.getElementById("startBtn").onclick = () => {
+  if (!isAuthChecked) {
+    alert("まだ初期化中です");
+    return;
+  }
+
+  if (uid && playerName) {
+    // 既存ユーザー
+    document.getElementById("playerName").innerText =
+      `プレイヤー名：${playerName}`;
+    showScreen("screen-menu");
+  } else {
+    // 新規ユーザー
+    showScreen("screen-name");
+  }
+};
+
+document.getElementById("nameSubmit").onclick = async () => {
+  const name = document.getElementById("nameInput").value;
+
+  if (!name) {
+    alert("名前を入力してください");
+    return;
+  }
+
+  const regex = /^[A-Za-z0-9]+$/;
+  if (!regex.test(name)) {
+    alert("大文字・小文字・アラビア数字のみが利用できます");
+    return;
+  }
+
+  playerName = name;
+
+  try {
+    await signInAnonymously(auth);
+    document.getElementById("playerName").innerText =
+      `プレイヤー名：${playerName}`;
+    showScreen("screen-menu");
+  } catch (e) {
+    console.error(e);
+  }
+};
 
 function get_result_msg(p1roll, p2roll) {
   if (p1roll > p2roll) {
@@ -88,40 +148,44 @@ onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
   document.getElementById("result").innerText = render(data);
 });
 
-// 匿名ログイン
-signInAnonymously(auth)
-  .then(() => {
-    console.log("ログイン成功");
-  })
-  .catch((error) => {
-    console.error(error);
-  });
-
 // ユーザー状態監視
 onAuthStateChanged(auth, async (user) => {
+  isAuthChecked = true;
+
   if (user) {
     uid = user.uid;
     console.log("UID:", uid);
 
-    const roomRef = doc(db, "rooms", "room1");
-    const roomSnap = await getDoc(roomRef);
-    const data = roomSnap.data();
-
-    if (!data) {
-      console.log("firestoreにデータ無し");
-      return;
+    // Firestoreから名前取得
+    const userDoc = await getDoc(doc(db, "users", uid));
+    if (userDoc.exists()) {
+      playerName = userDoc.data().name;
+    } else if (playerName) {
+      // 新規登録直後
+      await setDoc(doc(db, "users", uid), {
+        name: playerName
+      });
     }
 
-    if (!data.player1) {
-      console.log("player1として登録: " + uid);
-      await updateDoc(roomRef, { player1: uid });
-    } else if (!data.player2) {
-      console.log("player2として登録: " + uid);
-      await updateDoc(roomRef, { player2: uid });
-    }
+    // const roomRef = doc(db, "rooms", "room1");
+    // const roomSnap = await getDoc(roomRef);
+    // const data = roomSnap.data();
 
-    if (data.player1 === uid || data.player2 === uid) {
-      return;
-    }
+    // if (!data) {
+    //   console.log("firestoreにデータ無し");
+    //   return;
+    // }
+
+    // if (!data.player1) {
+    //   console.log("player1として登録: " + uid);
+    //   await updateDoc(roomRef, { player1: uid });
+    // } else if (!data.player2) {
+    //   console.log("player2として登録: " + uid);
+    //   await updateDoc(roomRef, { player2: uid });
+    // }
+
+    // if (data.player1 === uid || data.player2 === uid) {
+    //   return;
+    // }
   }
 });
