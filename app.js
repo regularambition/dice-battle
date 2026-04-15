@@ -1,5 +1,5 @@
 // Firebase読み込み
-import { db } from "./firebase.js";
+import { db, auth } from "./firebase.js";
 import {
   doc,
   updateDoc,
