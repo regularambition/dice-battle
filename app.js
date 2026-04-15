@@ -14,14 +14,28 @@ import {
 let uid = null;
 let currentRoomData = null;
 
+function get_result_msg(p1roll, p2roll) {
+  if (p1roll > p2roll) {
+    return "p1 won";
+  } else if (p1roll < p2roll) {
+    return "p2 won";
+  } else {
+    return "draw";
+  }
+}
+
 // ボタン操作
 document.getElementById("rollBtn").onclick = async () => {
   if (!uid || !currentRoomData) {
-    console.log("まだ初期化されていません");
+    alert("まだ初期化されていません");
     return;
   }
   if (!currentRoomData.player1 || !currentRoomData.player2) {
-    console.log("まだ対戦相手がいません");
+    alert("まだ対戦相手がいません");
+    return;
+  }
+  if (!(currentRoomData.player1 === uid || currentRoomData.player2 === uid)) {
+    alert("このルームの参加者ではありません");
     return;
   }
 
@@ -36,17 +50,23 @@ document.getElementById("rollBtn").onclick = async () => {
       });
     } else {
       alert("player1は既にサイコロを振っています");
+      return;
     }
-  } else if (currentRoomData.player2 === uid) {
+  } else {
     if (!currentRoomData.player2Roll) {
       await updateDoc(roomRef, {
         player2Roll: roll
       });
     } else {
       alert("player2は既にサイコロを振っています");
+      return;
     }
-  } else {
-    console.log("このルームの参加者ではありません");
+  }
+  if (currentRoomData.player1Roll && currentRoomData.player2Roll) {
+    let res = get_result_msg(currentRoomData.player1Roll, currentRoomData.player2Roll);
+    await updateDoc(roomRef, {
+      result: res
+    });
   }
 };
 
@@ -56,10 +76,7 @@ onSnapshot(doc(db, "rooms", "room1"), (docSnap) => {
   currentRoomData = data;
 
   if (data.player1Roll && data.player2Roll) {
-    let result = "draw";
-    if (data.player1Roll > data.player2Roll) result = "p1 won";
-    if (data.player2Roll > data.player1Roll) result = "p2 won";
-
+    let result = get_result_msg(data.player1Roll, data.player2Roll);
     document.getElementById("result").innerText =
       `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
   } else {
