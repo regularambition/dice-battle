@@ -11,26 +11,49 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+let uid = null;
+let currentRoomData = null;
+
 // ボタン操作
 document.getElementById("rollBtn").onclick = async () => {
-  const roll = Math.floor(Math.random() * 6) + 1;
-  const isPlayer1 = Math.random() > 0.5;
-
-  if (isPlayer1) {
-    await updateDoc(doc(db, "rooms", "room1"), {
-      player1Roll: roll
-    });
-  } else {
-    await updateDoc(doc(db, "rooms", "room1"), {
-      player2Roll: roll
-    });
+  if (!uid || !currentRoomData) {
+    console.log("まだ初期化されていません");
+    return;
+  }
+  if (!currentRoomData.player1 || !currentRoomData.player2) {
+    console.log("まだ対戦相手がいません");
+    return;
   }
 
+  const roll = Math.floor(Math.random() * 6) + 1;
+
+  const roomRef = doc(db, "rooms", "room1");
+
+  if (currentRoomData.player1 === uid) {
+    if (!currentRoomData.player1Roll) {
+      await updateDoc(roomRef, {
+        player1Roll: roll
+      });
+    } else {
+      alert("player1は既にサイコロを振っています");
+    }
+  } else if (currentRoomData.player2 === uid) {
+    if (!currentRoomData.player2Roll) {
+      await updateDoc(roomRef, {
+        player2Roll: roll
+      });
+    } else {
+      alert("player2は既にサイコロを振っています");
+    }
+  } else {
+    console.log("このルームの参加者ではありません");
+  }
 };
 
 // リアルタイム監視
 onSnapshot(doc(db, "rooms", "room1"), (docSnap) => {
   const data = docSnap.data();
+  currentRoomData = data;
 
   if (data.player1Roll && data.player2Roll) {
     let result = "draw";
@@ -41,8 +64,6 @@ onSnapshot(doc(db, "rooms", "room1"), (docSnap) => {
       `P1: ${data.player1Roll}, P2: ${data.player2Roll}`;
   }
 });
-
-let uid = null;
 
 // 匿名ログイン
 signInAnonymously(auth)
