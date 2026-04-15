@@ -63,11 +63,13 @@ onSnapshot(doc(db, "rooms", "room1"), (docSnap) => {
     document.getElementById("result").innerText =
       `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
   } else {
-    if (!data.player1Roll) data.player1Roll = "waiting for rolling";
-    if (!data.player2Roll) data.player2Roll = "waiting for rolling";
+    let msg_p1 = data.player1Roll;
+    let msg_p2 = data.player2Roll;
+    if (!msg_p1) msg_p1 = "waiting for rolling";
+    if (!msg_p2) msg_p2 = "waiting for rolling";
 
     document.getElementById("result").innerText =
-      `P1: ${data.player1Roll}, P2: ${data.player2Roll}`;
+      `P1: ${msg_p1}, P2: ${msg_p2}`;
   }
 });
 
