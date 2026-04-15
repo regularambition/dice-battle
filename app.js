@@ -145,7 +145,7 @@ onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
       result: result
     });
   }
-  document.getElementById("result").innerText = render(data);
+  // document.getElementById("result").innerText = render(data);
 });
 
 // ユーザー状態監視
