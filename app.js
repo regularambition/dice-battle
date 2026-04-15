@@ -94,44 +94,44 @@ function render(data) {
 }
 
 // ボタン操作
-document.getElementById("rollBtn").onclick = async () => {
-  if (!uid || !currentRoomData) {
-    alert("まだ初期化されていません");
-    return;
-  }
-  if (!currentRoomData.player1 || !currentRoomData.player2) {
-    alert("まだ対戦相手がいません");
-    return;
-  }
-  if (!(currentRoomData.player1 === uid || currentRoomData.player2 === uid)) {
-    alert("このルームの参加者ではありません");
-    return;
-  }
+// document.getElementById("rollBtn").onclick = async () => {
+//   if (!uid || !currentRoomData) {
+//     alert("まだ初期化されていません");
+//     return;
+//   }
+//   if (!currentRoomData.player1 || !currentRoomData.player2) {
+//     alert("まだ対戦相手がいません");
+//     return;
+//   }
+//   if (!(currentRoomData.player1 === uid || currentRoomData.player2 === uid)) {
+//     alert("このルームの参加者ではありません");
+//     return;
+//   }
 
-  const roll = Math.floor(Math.random() * 6) + 1;
+//   const roll = Math.floor(Math.random() * 6) + 1;
 
-  const roomRef = doc(db, "rooms", "room1");
+//   const roomRef = doc(db, "rooms", "room1");
 
-  if (currentRoomData.player1 === uid) {
-    if (currentRoomData.player1Roll == null) {
-      await updateDoc(roomRef, {
-        player1Roll: roll
-      });
-    } else {
-      alert("player1は既にサイコロを振っています");
-      return;
-    }
-  } else {
-    if (currentRoomData.player2Roll == null) {
-      await updateDoc(roomRef, {
-        player2Roll: roll
-      });
-    } else {
-      alert("player2は既にサイコロを振っています");
-      return;
-    }
-  }
-};
+//   if (currentRoomData.player1 === uid) {
+//     if (currentRoomData.player1Roll == null) {
+//       await updateDoc(roomRef, {
+//         player1Roll: roll
+//       });
+//     } else {
+//       alert("player1は既にサイコロを振っています");
+//       return;
+//     }
+//   } else {
+//     if (currentRoomData.player2Roll == null) {
+//       await updateDoc(roomRef, {
+//         player2Roll: roll
+//       });
+//     } else {
+//       alert("player2は既にサイコロを振っています");
+//       return;
+//     }
+//   }
+// };
 
 // リアルタイム監視
 onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
