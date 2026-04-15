@@ -24,6 +24,15 @@ function get_result_msg(p1roll, p2roll) {
   }
 }
 
+function render(data) {
+  if (data.player1Roll && data.player2Roll) {
+    const result = get_result_msg(data.player1Roll, data.player2Roll);
+    return `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
+  } else {
+    return `P1: ${data.player1Roll ?? "waiting"}, P2: ${data.player2Roll ?? "waiting"}`;
+  }
+}
+
 // ボタン操作
 document.getElementById("rollBtn").onclick = async () => {
   if (!uid || !currentRoomData) {
@@ -44,7 +53,7 @@ document.getElementById("rollBtn").onclick = async () => {
   const roomRef = doc(db, "rooms", "room1");
 
   if (currentRoomData.player1 === uid) {
-    if (!currentRoomData.player1Roll) {
+    if (currentRoomData.player1Roll == null) {
       await updateDoc(roomRef, {
         player1Roll: roll
       });
@@ -53,7 +62,7 @@ document.getElementById("rollBtn").onclick = async () => {
       return;
     }
   } else {
-    if (!currentRoomData.player2Roll) {
+    if (currentRoomData.player2Roll == null) {
       await updateDoc(roomRef, {
         player2Roll: roll
       });
@@ -62,32 +71,21 @@ document.getElementById("rollBtn").onclick = async () => {
       return;
     }
   }
-  if (currentRoomData.player1Roll && currentRoomData.player2Roll) {
-    let res = get_result_msg(currentRoomData.player1Roll, currentRoomData.player2Roll);
-    await updateDoc(roomRef, {
-      result: res
-    });
-  }
 };
 
 // リアルタイム監視
-onSnapshot(doc(db, "rooms", "room1"), (docSnap) => {
+onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
   const data = docSnap.data();
   currentRoomData = data;
 
-  if (data.player1Roll && data.player2Roll) {
-    let result = get_result_msg(data.player1Roll, data.player2Roll);
-    document.getElementById("result").innerText =
-      `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
-  } else {
-    let msg_p1 = data.player1Roll;
-    let msg_p2 = data.player2Roll;
-    if (!msg_p1) msg_p1 = "waiting for rolling";
-    if (!msg_p2) msg_p2 = "waiting for rolling";
+  if (data.player1Roll && data.player2Roll && !data.result) {
+    const result = get_result_msg(data.player1Roll, data.player2Roll);
 
-    document.getElementById("result").innerText =
-      `P1: ${msg_p1}, P2: ${msg_p2}`;
+    await updateDoc(doc(db, "rooms", "room1"), {
+      result: result
+    });
   }
+  document.getElementById("result").innerText = render(data);
 });
 
 // 匿名ログイン
