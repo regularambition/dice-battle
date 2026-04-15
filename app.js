@@ -3,7 +3,8 @@ import { db, auth } from "./firebase.js";
 import {
   doc,
   updateDoc,
-  onSnapshot
+  onSnapshot,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
@@ -53,19 +54,30 @@ signInAnonymously(auth)
   });
 
 // ユーザー状態監視
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   if (user) {
     uid = user.uid;
     console.log("UID:", uid);
+
+    const roomRef = doc(db, "rooms", "room1");
+    const roomSnap = await getDoc(roomRef);
+    const data = roomSnap.data();
+
+    if (!data) {
+      console.log("firestoreにデータ無し");
+      return;
+    }
+
+    if (!data.player1) {
+      console.log("player1として登録: " + uid);
+      await updateDoc(roomRef, { player1: uid });
+    } else if (!data.player2) {
+      console.log("player2として登録: " + uid);
+      await updateDoc(roomRef, { player2: uid });
+    }
+
+    if (data.player1 === uid || data.player2 === uid) {
+      return;
+    }
   }
 });
-
-const roomRef = doc(db, "rooms", "room1");
-const roomSnap = await getDoc(roomRef);
-const data = roomSnap.data();
-
-if (!data.player1) {
-  await updateDoc(roomRef, { player1: uid });
-} else if (!data.player2) {
-  await updateDoc(roomRef, { player2: uid });
-}
