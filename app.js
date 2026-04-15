@@ -57,8 +57,14 @@ onSnapshot(doc(db, "rooms", "room1"), (docSnap) => {
 
   if (data.player1Roll && data.player2Roll) {
     let result = "draw";
-    if (data.player1Roll > data.player2Roll) result = "p1";
-    if (data.player2Roll > data.player1Roll) result = "p2";
+    if (data.player1Roll > data.player2Roll) result = "p1 won";
+    if (data.player2Roll > data.player1Roll) result = "p2 won";
+
+    document.getElementById("result").innerText =
+      `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
+  } else {
+    if (!data.player1Roll) data.player1Roll = "waiting for rolling";
+    if (!data.player2Roll) data.player2Roll = "waiting for rolling";
 
     document.getElementById("result").innerText =
       `P1: ${data.player1Roll}, P2: ${data.player2Roll}`;
