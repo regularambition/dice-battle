@@ -293,7 +293,7 @@ function startRoomListener() {
   );
 
   onSnapshot(roomQuery, async (snapshot) => {
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach(async (docSnap) => {
       const room = docSnap.data();
 
       // ★ すでに入っているなら無視（重複防止）
