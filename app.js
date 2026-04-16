@@ -25,6 +25,7 @@ let isAuthChecked = false;
 let isRoomListenerRunning = false;
 let playerName = null;
 let myWaitingDocId = null;
+let currentRoomId = null;
 
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));//timeはミリ秒
 
