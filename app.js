@@ -148,19 +148,19 @@ function render(data) {
 // };
 
 // リアルタイム監視
-onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
-  const data = docSnap.data();
-  currentRoomData = data;
+// onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
+//   const data = docSnap.data();
+//   currentRoomData = data;
 
-  if (data.player1Roll && data.player2Roll && !data.result) {
-    const result = get_result_msg(data.player1Roll, data.player2Roll);
+//   if (data.player1Roll && data.player2Roll && !data.result) {
+//     const result = get_result_msg(data.player1Roll, data.player2Roll);
 
-    await updateDoc(doc(db, "rooms", "room1"), {
-      result: result
-    });
-  }
-  // document.getElementById("result").innerText = render(data);
-});
+//     await updateDoc(doc(db, "rooms", "room1"), {
+//       result: result
+//     });
+//   }
+//   document.getElementById("result").innerText = render(data);
+// });
 
 // ユーザー状態監視
 onAuthStateChanged(auth, async (user) => {
