@@ -247,6 +247,7 @@ async function joinQueue() {
 
     // ⑤ waiting削除
     for (const docSnap of users) {
+      console.log("docSnap.id = " + docSnap.id);
       await deleteDoc(doc(db, "waiting", docSnap.id));
     }
 
@@ -254,10 +255,20 @@ async function joinQueue() {
   }
 }
 
+// async function leaveQueue() {
+//   const q = query(collection(db, "waiting"));
+//   const snapshot = await getDocs(q);
+// }
+
 document.getElementById("randomBtn").onclick = async () => {
   await joinQueue();
   showScreen("screen-random-match-waiting");
 };
+
+// document.getElementById("randomMatchCancelBtn").onclick = async () => {
+//   await leaveQueue();
+//   showScreen("screen-menu");
+// };
 
 function startRoomListener() {
   const roomQuery_p1 = query(
