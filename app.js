@@ -4,8 +4,15 @@ import {
   doc,
   updateDoc,
   onSnapshot,
+  where,
   getDoc,
-  setDoc
+  setDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
@@ -18,7 +25,7 @@ let isAuthChecked = false;
 let playerName = null;
 
 function showScreen(screenId) {
-  const screens = ["screen-title", "screen-name", "screen-menu"];
+  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting"];
 
   screens.forEach(id => {
     document.getElementById(id).style.display = "none";
@@ -200,4 +207,67 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   isAuthChecked = true;
+});
+
+async function joinQueue() {
+  // ① 自分を待機キューに追加
+  await addDoc(collection(db, "waiting"), {
+    uid: uid,
+    createdAt: Date.now()
+  });
+
+  // ② 待機キュー取得
+  const q = query(collection(db, "waiting"), orderBy("createdAt"));
+  const snapshot = await getDocs(q);
+
+  // ③ 2人以上ならマッチング
+  if (snapshot.size >= 2) {
+    const users = snapshot.docs.slice(0, 2);
+
+    const uid1 = users[0].data().uid;
+    const uid2 = users[1].data().uid;
+
+    // ④ room作成
+    const roomRef = await addDoc(collection(db, "rooms"), {
+      player1: uid1,
+      player2: uid2,
+      player1Roll: null,
+      player2Roll: null,
+      result: null
+    });
+
+    // ⑤ waiting削除
+    for (const docSnap of users) {
+      await deleteDoc(doc(db, "waiting", docSnap.id));
+    }
+
+    console.log("マッチング成功:", roomRef.id);
+  }
+}
+
+document.getElementById("randomBtn").onclick = async () => {
+  await joinQueue();
+  showScreen("screen-random-match-waiting");
+};
+
+const roomQuery_p1 = query(
+  collection(db, "rooms"),
+  where("player1", "==", uid)
+);
+
+onSnapshot(roomQuery_p1, (snapshot) => {
+  snapshot.forEach((docSnap) => {
+    console.log("player1側で部屋見つかった:", docSnap.id);
+  });
+});
+
+const roomQuery_p2 = query(
+  collection(db, "rooms"),
+  where("player2", "==", uid)
+);
+
+onSnapshot(roomQuery_p2, (snapshot) => {
+  snapshot.forEach((docSnap) => {
+    console.log("player2側で部屋見つかった:", docSnap.id);
+  });
 });

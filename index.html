@@ -7,25 +7,31 @@
 
 <body>
 
-  <!-- ① タイトル画面 -->
+  <!-- タイトル画面 -->
   <div id="screen-title">
     <h1>Dice Battle</h1>
     <button id="startBtn">ゲーム開始</button>
   </div>
 
-  <!-- ② 名前入力画面 -->
+  <!-- 名前入力画面 -->
   <div id="screen-name" style="display:none;">
     <h1>ハンドルネームを入力</h1>
     <input id="nameInput" />
     <button id="nameSubmit">決定</button>
   </div>
 
-  <!-- ③ モード選択画面 -->
+  <!-- モード選択画面 -->
   <div id="screen-menu" style="display:none;">
     <p id="playerName"></p>
     <h1>マッチ形式選択</h1>
     <button id="randomBtn">ランダムマッチ</button>
     <button id="privateBtn">プライベートマッチ</button>
+  </div>
+
+  <!-- ランダムマッチング待機画面 -->
+  <div id="screen-random-match-waiting" style="display:none;">
+    <h1>対戦相手を探しています</h1>
+    <button id="randomMatchCancelBtn">やめる</button>
   </div>
 
   <!--
