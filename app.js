@@ -266,8 +266,8 @@ async function leaveQueue() {
 }
 
 document.getElementById("randomBtn").onclick = async () => {
-  await joinQueue();
   showScreen("screen-random-match-waiting");
+  await joinQueue();
 };
 
 document.getElementById("randomMatchCancelBtn").onclick = async () => {
@@ -292,7 +292,7 @@ function startRoomListener() {
     where("players", "array-contains", uid)
   );
 
-  onSnapshot(roomQuery, (snapshot) => {
+  onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach((docSnap) => {
       const room = docSnap.data();
 
@@ -308,7 +308,7 @@ function startRoomListener() {
       // ★ waitingから削除（まだ残ってた場合）
       if (myWaitingDocId) {
         try {
-          leaveQueue();
+          await leaveQueue();
         } catch (e) {
           console.log("waiting削除失敗（問題なし）");
         }
@@ -317,7 +317,7 @@ function startRoomListener() {
 
       document.getElementById("randomMatchWaitingNotification").innerText =
         `相手が見つかりました。3秒後に対戦が始まります`;
-      sleep(3000);
+      await sleep(3000);
       document.getElementById("randomMatchWaitingNotification").innerText = ``;
 
       // ★ ゲーム画面へ
