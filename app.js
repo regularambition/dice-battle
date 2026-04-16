@@ -27,7 +27,7 @@ let playerName = null;
 let myWaitingDocId = null;
 
 function showScreen(screenId) {
-  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting"];
+  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-random-match-playing"];
 
   screens.forEach(id => {
     document.getElementById(id).style.display = "none";
@@ -241,6 +241,7 @@ async function joinQueue() {
 
     // ④ room作成
     const roomRef = await addDoc(collection(db, "rooms"), {
+      players: [uid1, uid2],
       player1: uid1,
       player2: uid2,
       player1Roll: null,
@@ -250,7 +251,6 @@ async function joinQueue() {
 
     // ⑤ waiting削除
     for (const docSnap of users) {
-      console.log("docSnap.id = " + docSnap.id);
       await deleteDoc(doc(db, "waiting", docSnap.id));
     }
 
@@ -279,25 +279,14 @@ document.getElementById("randomMatchCancelBtn").onclick = async () => {
 };
 
 function startRoomListener() {
-  const roomQuery_p1 = query(
+  const roomQuery = query(
     collection(db, "rooms"),
-    where("player1", "==", uid)
+    where("players", "array-contains", uid)
   );
 
-  onSnapshot(roomQuery_p1, (snapshot) => {
+  onSnapshot(roomQuery, (snapshot) => {
     snapshot.forEach((docSnap) => {
-      console.log("player1側で部屋見つかった:", docSnap.id);
-    });
-  });
-
-  const roomQuery_p2 = query(
-    collection(db, "rooms"),
-    where("player2", "==", uid)
-  );
-
-  onSnapshot(roomQuery_p2, (snapshot) => {
-    snapshot.forEach((docSnap) => {
-      console.log("player2側で部屋見つかった:", docSnap.id);
+      console.log("部屋見つかった:", docSnap.id);
     });
   });
 }
