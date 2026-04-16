@@ -26,8 +26,10 @@ let isRoomListenerRunning = false;
 let playerName = null;
 let myWaitingDocId = null;
 
+const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));//timeはミリ秒
+
 function showScreen(screenId) {
-  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-random-match-playing"];
+  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
 
   screens.forEach(id => {
     document.getElementById(id).style.display = "none";
@@ -260,7 +262,6 @@ async function joinQueue() {
 
 async function leaveQueue() {
   await deleteDoc(doc(db, "waiting", myWaitingDocId));
-  myWaitingDocId = null;
 }
 
 document.getElementById("randomBtn").onclick = async () => {
@@ -274,7 +275,13 @@ document.getElementById("randomMatchCancelBtn").onclick = async () => {
     return;
   }
 
-  await leaveQueue();
+  try {
+    await leaveQueue();
+  } catch (e) {
+    alert("waiting削除失敗");
+    return;
+  }
+  myWaitingDocId = null;
   showScreen("screen-menu");
 };
 
@@ -286,7 +293,38 @@ function startRoomListener() {
 
   onSnapshot(roomQuery, (snapshot) => {
     snapshot.forEach((docSnap) => {
-      console.log("部屋見つかった:", docSnap.id);
+      const room = docSnap.data();
+
+      // ★ すでに入っているなら無視（重複防止）
+      if (currentRoomId) {
+        return;
+      }
+
+      console.log("マッチ成立:", docSnap.id);
+
+      currentRoomId = docSnap.id;
+
+      // ★ waitingから削除（まだ残ってた場合）
+      if (myWaitingDocId) {
+        try {
+          leaveQueue();
+        } catch (e) {
+          console.log("waiting削除失敗（問題なし）");
+        }
+        myWaitingDocId = null;
+      }
+
+      document.getElementById("randomMatchWaitingNotification").innerText =
+        `相手が見つかりました。3秒後に対戦が始まります`;
+      sleep(3000);
+      document.getElementById("randomMatchWaitingNotification").innerText = ``;
+
+      // ★ ゲーム画面へ
+      showScreen("screen-game");
+
+      // ★ UI表示更新
+      document.getElementById("roomId").innerText =
+        `Room: ${currentRoomId}`;
     });
   });
 }
