@@ -37,10 +37,8 @@ document.getElementById("startBtn").onclick = () => {
     return;
   }
 
-  if (uid && playerName) {
+  if (uid) {
     // 既存ユーザー
-    document.getElementById("playerName").innerText =
-      `プレイヤー名：${playerName}`;
     showScreen("screen-menu");
   } else {
     // 新規ユーザー
@@ -49,6 +47,11 @@ document.getElementById("startBtn").onclick = () => {
 };
 
 document.getElementById("nameSubmit").onclick = async () => {
+  if (uid) {
+    alert("既に登録済です");
+    return;
+  }
+
   const name = document.getElementById("nameInput").value;
 
   if (!name) {
@@ -61,17 +64,21 @@ document.getElementById("nameSubmit").onclick = async () => {
     alert("大文字・小文字・アラビア数字のみが利用できます");
     return;
   }
+  const max_valid_length = 12;
+  if (name.length > max_valid_length) {
+    alert(max_valid_length + "文字以内で入力してください");
+    return;
+  }
 
   playerName = name;
 
   try {
     await signInAnonymously(auth);
-    document.getElementById("playerName").innerText =
-      `プレイヤー名：${playerName}`;
-    showScreen("screen-menu");
   } catch (e) {
     console.error(e);
   }
+
+  showScreen("screen-menu");
 };
 
 function get_result_msg(p1roll, p2roll) {
@@ -150,8 +157,6 @@ onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
 
 // ユーザー状態監視
 onAuthStateChanged(auth, async (user) => {
-  isAuthChecked = true;
-
   if (user) {
     uid = user.uid;
     console.log("UID:", uid);
@@ -159,12 +164,17 @@ onAuthStateChanged(auth, async (user) => {
     // Firestoreから名前取得
     const userDoc = await getDoc(doc(db, "users", uid));
     if (userDoc.exists()) {
+      // 既存ユーザー
       playerName = userDoc.data().name;
     } else if (playerName) {
       // 新規登録直後
       await setDoc(doc(db, "users", uid), {
         name: playerName
       });
+    }
+    if (playerName) {
+      document.getElementById("playerName").innerText =
+        `プレイヤー名：${playerName}`;
     }
 
     // const roomRef = doc(db, "rooms", "room1");
@@ -188,4 +198,6 @@ onAuthStateChanged(auth, async (user) => {
     //   return;
     // }
   }
+
+  isAuthChecked = true;
 });
