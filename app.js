@@ -168,6 +168,10 @@ onAuthStateChanged(auth, async (user) => {
     uid = user.uid;
     console.log("UID:", uid);
 
+    if (!isAuthChecked) {
+      startRoomListener();
+    }
+
     // Firestoreから名前取得
     const userDoc = await getDoc(doc(db, "users", uid));
     if (userDoc.exists()) {
@@ -250,24 +254,26 @@ document.getElementById("randomBtn").onclick = async () => {
   showScreen("screen-random-match-waiting");
 };
 
-const roomQuery_p1 = query(
-  collection(db, "rooms"),
-  where("player1", "==", uid)
-);
+function startRoomListener() {
+  const roomQuery_p1 = query(
+    collection(db, "rooms"),
+    where("player1", "==", uid)
+  );
 
-onSnapshot(roomQuery_p1, (snapshot) => {
-  snapshot.forEach((docSnap) => {
-    console.log("player1側で部屋見つかった:", docSnap.id);
+  onSnapshot(roomQuery_p1, (snapshot) => {
+    snapshot.forEach((docSnap) => {
+      console.log("player1側で部屋見つかった:", docSnap.id);
+    });
   });
-});
 
-const roomQuery_p2 = query(
-  collection(db, "rooms"),
-  where("player2", "==", uid)
-);
+  const roomQuery_p2 = query(
+    collection(db, "rooms"),
+    where("player2", "==", uid)
+  );
 
-onSnapshot(roomQuery_p2, (snapshot) => {
-  snapshot.forEach((docSnap) => {
-    console.log("player2側で部屋見つかった:", docSnap.id);
+  onSnapshot(roomQuery_p2, (snapshot) => {
+    snapshot.forEach((docSnap) => {
+      console.log("player2側で部屋見つかった:", docSnap.id);
+    });
   });
-});
+}
