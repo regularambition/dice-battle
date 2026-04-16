@@ -24,6 +24,7 @@ let currentRoomData = null;
 let isAuthChecked = false;
 let isRoomListenerRunning = false;
 let playerName = null;
+let myWaitingDocId = null;
 
 function showScreen(screenId) {
   const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting"];
@@ -220,10 +221,12 @@ onAuthStateChanged(auth, async (user) => {
 
 async function joinQueue() {
   // ① 自分を待機キューに追加
-  await addDoc(collection(db, "waiting"), {
+  const docRef = await addDoc(collection(db, "waiting"), {
     uid: uid,
     createdAt: Date.now()
   });
+  // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
+  myWaitingDocId = docRef.id;
 
   // ② 待機キュー取得
   const q = query(collection(db, "waiting"), orderBy("createdAt"));
@@ -255,20 +258,25 @@ async function joinQueue() {
   }
 }
 
-// async function leaveQueue() {
-//   const q = query(collection(db, "waiting"));
-//   const snapshot = await getDocs(q);
-// }
+async function leaveQueue() {
+  await deleteDoc(doc(db, "waiting", myWaitingDocId));
+  myWaitingDocId = null;
+}
 
 document.getElementById("randomBtn").onclick = async () => {
   await joinQueue();
   showScreen("screen-random-match-waiting");
 };
 
-// document.getElementById("randomMatchCancelBtn").onclick = async () => {
-//   await leaveQueue();
-//   showScreen("screen-menu");
-// };
+document.getElementById("randomMatchCancelBtn").onclick = async () => {
+  if (!myWaitingDocId) {
+    alert("マッチング相手待機状態ではありません");
+    return;
+  }
+
+  await leaveQueue();
+  showScreen("screen-menu");
+};
 
 function startRoomListener() {
   const roomQuery_p1 = query(
