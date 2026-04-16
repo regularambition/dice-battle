@@ -22,6 +22,7 @@ import {
 let uid = null;
 let currentRoomData = null;
 let isAuthChecked = false;
+let isRoomListenerRunning = false;
 let playerName = null;
 
 function showScreen(screenId) {
@@ -168,8 +169,9 @@ onAuthStateChanged(auth, async (user) => {
     uid = user.uid;
     console.log("UID:", uid);
 
-    if (!isAuthChecked) {
+    if (!isRoomListenerRunning) {
       startRoomListener();
+      isRoomListenerRunning = true;
     }
 
     // Firestoreから名前取得
@@ -210,7 +212,9 @@ onAuthStateChanged(auth, async (user) => {
     // }
   }
 
-  isAuthChecked = true;
+  if (!isAuthChecked) {
+    isAuthChecked = true;
+  }
 });
 
 async function joinQueue() {
