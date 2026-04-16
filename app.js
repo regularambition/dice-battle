@@ -170,6 +170,7 @@ onAuthStateChanged(auth, async (user) => {
     console.log("UID:", uid);
 
     if (!isRoomListenerRunning) {
+      console.log(uid + "をキーとする部屋の監視を開始");
       startRoomListener();
       isRoomListenerRunning = true;
     }
