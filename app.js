@@ -22,10 +22,10 @@ import {
 let myUid = null;
 let currentRoomData = null;
 let isAuthChecked = false;
-let isRoomListenerRunning = false;
 let playerName = null;
 let myWaitingDocId = null;
 let currentRoomId = null;
+let unsubscribeRoomListener = null;
 
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -102,7 +102,7 @@ document.getElementById("nameSubmit").onclick = async () => {
   }
   const max_valid_length = 12;
   if (name.length > max_valid_length) {
-    alert(max_valid_length + "文字以内で入力してください");
+    alert(`${max_valid_length}文字以内で入力してください`);
     return;
   }
 
@@ -184,24 +184,12 @@ onAuthStateChanged(auth, async (user) => {
 
     // Firestoreから名前取得
     const userDoc = await fetchUserDocByUid(myUid);
-
-    // 切断した後に再接続してきた場合は即座に
-    // currentRoomIdに値を入れてstartRoomListener内における
-    // onSnapshotの処理を抑止する
-    if (userDoc.exists() && userDoc.data().currentRoomId) {
-      currentRoomId = userDoc.data().currentRoomId;
-    }
-    if (!isRoomListenerRunning) {
-      console.log(`${myUid}をキーとする部屋の監視を開始`);
-      startRoomListener();
-      isRoomListenerRunning = true;
-    }
-
     if (userDoc.exists()) {
       // 既存ユーザー
       playerName = userDoc.data().name;
 
       if (userDoc.data().currentRoomId) {
+        currentRoomId = userDoc.data().currentRoomId;
         startGameListener(currentRoomId);
         showScreen("screen-game");
       }
@@ -267,6 +255,7 @@ async function leaveQueue() {
 
 document.getElementById("randomBtn").onclick = async () => {
   showScreen("screen-random-match-waiting");
+  startRoomListener();
   await joinQueue();
 };
 
@@ -283,6 +272,7 @@ document.getElementById("randomMatchCancelBtn").onclick = async () => {
     return;
   }
   myWaitingDocId = null;
+  stopRoomListener();
   showScreen("screen-menu");
 };
 
@@ -295,15 +285,23 @@ function getOpponentIdFromRoomData(roomData) {
 }
 
 function startRoomListener() {
+  if (unsubscribeRoomListener) {
+    return;
+  }
+  console.log("roomListener起動成功");
+
   const roomQuery = query(
     collection(db, "rooms"),
     where("players", "array-contains", myUid)
   );
 
-  onSnapshot(roomQuery, async (snapshot) => {
+  unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach(async (docSnap) => {
+      console.log("roomListenerが呼ばれました");
+
       // ★ すでに入っているなら無視（重複防止）
       if (currentRoomId) {
+        console.log("既に入室済みのためroomListenerが即座に終了しました");
         return;
       }
 
@@ -334,8 +332,19 @@ function startRoomListener() {
 
       // ★ ゲーム画面へ
       showScreen("screen-game");
+
+      // ★ マッチ成立したら監視停止
+      stopRoomListener();
     });
   });
+}
+
+function stopRoomListener() {
+  if (unsubscribeRoomListener) {
+    unsubscribeRoomListener();
+    unsubscribeRoomListener = null;
+    console.log("roomListener停止成功");
+  }
 }
 
 function startGameListener(roomId) {
