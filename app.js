@@ -26,7 +26,6 @@ let isRoomListenerRunning = false;
 let playerName = null;
 let myWaitingDocId = null;
 let currentRoomId = null;
-let opponentName = null;
 
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -131,6 +130,7 @@ function get_result_msg(myRoll, opponentRoll) {
 function render(data) {
   const myRoll = (data.player1 === myUid) ? data.player1Roll : data.player2Roll;
   const opponentRoll = (data.player1 === myUid) ? data.player2Roll : data.player1Roll;
+  const opponentName = document.getElementById("opponentName").innerText;
 
   if (myRoll != null && opponentRoll != null) {
     const result = get_result_msg(myRoll, opponentRoll);
@@ -287,7 +287,7 @@ document.getElementById("randomMatchCancelBtn").onclick = async () => {
   showScreen("screen-menu");
 };
 
-function getOpponentId(roomData) {
+function getOpponentIdFromRoomData(roomData) {
   if (roomData.player1 === myUid) {
     return roomData.player2;
   } else {
@@ -330,16 +330,6 @@ function startRoomListener() {
       await sleep(3000);
       document.getElementById("randomMatchWaitingNotification").innerText = ``;
 
-      // ★ UI表示更新
-      document.getElementById("roomId").innerText =
-        `Room: ${currentRoomId}`;
-      const room = docSnap.data();
-      const opponentId = getOpponentId(room);
-      const opponentDoc = await fetchUserDocByUid(opponentId);
-      opponentName = opponentDoc.data().name;
-      document.getElementById("opponentName").innerText =
-        `相手の名前：${opponentName}`;
-
       // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
       startGameListener(currentRoomId);
 
@@ -357,13 +347,17 @@ function startGameListener(roomId) {
     currentRoomData = data;
 
     // UI更新
-    document.getElementById("result").innerText = render(data);
-
-    const opponentId = getOpponentId(data);
+    const opponentId = getOpponentIdFromRoomData(data);
     const opponentLastSeen = data.lastSeen?.[opponentId];
-    if (opponentLastSeen && isDisconnected(opponentLastSeen)) {
-      document.getElementById("result").innerText =
-        "相手が切断しました";
+    if (document.getElementById("roomId").innerText.length === 0) {
+      document.getElementById("roomId").innerText =
+        `${currentRoomId}`;
+      const opponentDoc = await fetchUserDocByUid(opponentId);
+      document.getElementById("opponentName").innerText =
+        `${opponentDoc.data().name}`;
     }
+    document.getElementById("result").innerText = render(data);
+    document.getElementById("opponentConnectionNotification").innerText =
+      (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
   });
 }

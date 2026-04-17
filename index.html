@@ -40,10 +40,13 @@
   <!-- ランダムマッチ対戦画面 -->
   <div id="screen-game" style="display:none;">
     <h2>ゲーム画面</h2>
-    <div id="roomId"></div>
-    <div id="opponentName"></div>
+    <div>Room: <p id="roomId"></p>
+    </div>
+    <div>相手の名前：<p id="opponentName"></p>
+    </div>
     <button id="rollBtn">Roll!</button>
     <div id="result"></div>
+    <div id="opponentConnectionNotification"></div>
   </div>
 
   <script type="module" src="app.js"></script>
