@@ -238,7 +238,8 @@ async function joinQueue() {
       player2: uid2,
       player1Roll: null,
       player2Roll: null,
-      lastSeen: { uid1: nowDateInteger, uid2: nowDateInteger }
+      // lastSeen: { uid1: nowDateInteger, uid2: nowDateInteger }
+      lastSeen: {}
     });
 
     // ⑤ waiting削除
