@@ -4,21 +4,34 @@ import {
   doc,
   updateDoc,
   onSnapshot,
+  where,
   getDoc,
-  setDoc
+  setDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-let uid = null;
+let myUid = null;
 let currentRoomData = null;
 let isAuthChecked = false;
+let isRoomListenerRunning = false;
 let playerName = null;
+let myWaitingDocId = null;
+let currentRoomId = null;
+let opponentName = null;
+
+const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));//timeはミリ秒
 
 function showScreen(screenId) {
-  const screens = ["screen-title", "screen-name", "screen-menu"];
+  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
 
   screens.forEach(id => {
     document.getElementById(id).style.display = "none";
@@ -37,7 +50,7 @@ document.getElementById("startBtn").onclick = () => {
     return;
   }
 
-  if (uid) {
+  if (myUid) {
     // 既存ユーザー
     showScreen("screen-menu");
   } else {
@@ -47,7 +60,7 @@ document.getElementById("startBtn").onclick = () => {
 };
 
 document.getElementById("nameSubmit").onclick = async () => {
-  if (uid) {
+  if (myUid) {
     alert("既に登録済です");
     return;
   }
@@ -81,94 +94,84 @@ document.getElementById("nameSubmit").onclick = async () => {
   showScreen("screen-menu");
 };
 
-function get_result_msg(p1roll, p2roll) {
-  if (p1roll > p2roll) {
-    return "p1 won";
-  } else if (p1roll < p2roll) {
-    return "p2 won";
+function get_result_msg(myRoll, opponentRoll) {
+  if (myRoll > opponentRoll) {
+    return "YOU WIN!!!";
+  } else if (myRoll < opponentRoll) {
+    return "you lose...";
   } else {
     return "draw";
   }
 }
 
 function render(data) {
-  if (data.player1Roll && data.player2Roll) {
-    const result = get_result_msg(data.player1Roll, data.player2Roll);
-    return `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
+  const myRoll = (data.player1 === myUid) ? data.player1Roll : data.player2Roll;
+  const opponentRoll = (data.player1 === myUid) ? data.player2Roll : data.player1Roll;
+
+  if (myRoll != null && opponentRoll != null) {
+    const result = get_result_msg(myRoll, opponentRoll);
+    return `you: ${myRoll}, ${opponentName}: ${opponentRoll} -> ${result}`;
   } else {
-    return `P1: ${data.player1Roll ?? "waiting"}, P2: ${data.player2Roll ?? "waiting"}`;
+    return `you: ${myRoll ?? "waiting"}, ${opponentName}: ${opponentRoll ?? "waiting"}`;
   }
 }
 
 // ボタン操作
-// document.getElementById("rollBtn").onclick = async () => {
-//   if (!uid || !currentRoomData) {
-//     alert("まだ初期化されていません");
-//     return;
-//   }
-//   if (!currentRoomData.player1 || !currentRoomData.player2) {
-//     alert("まだ対戦相手がいません");
-//     return;
-//   }
-//   if (!(currentRoomData.player1 === uid || currentRoomData.player2 === uid)) {
-//     alert("このルームの参加者ではありません");
-//     return;
-//   }
-
-//   const roll = Math.floor(Math.random() * 6) + 1;
-
-//   const roomRef = doc(db, "rooms", "room1");
-
-//   if (currentRoomData.player1 === uid) {
-//     if (currentRoomData.player1Roll == null) {
-//       await updateDoc(roomRef, {
-//         player1Roll: roll
-//       });
-//     } else {
-//       alert("player1は既にサイコロを振っています");
-//       return;
-//     }
-//   } else {
-//     if (currentRoomData.player2Roll == null) {
-//       await updateDoc(roomRef, {
-//         player2Roll: roll
-//       });
-//     } else {
-//       alert("player2は既にサイコロを振っています");
-//       return;
-//     }
-//   }
-// };
-
-// リアルタイム監視
-onSnapshot(doc(db, "rooms", "room1"), async (docSnap) => {
-  const data = docSnap.data();
-  currentRoomData = data;
-
-  if (data.player1Roll && data.player2Roll && !data.result) {
-    const result = get_result_msg(data.player1Roll, data.player2Roll);
-
-    await updateDoc(doc(db, "rooms", "room1"), {
-      result: result
-    });
+document.getElementById("rollBtn").onclick = async () => {
+  if (!currentRoomId || !currentRoomData) {
+    alert("部屋が初期化されていません");
+    return;
   }
-  // document.getElementById("result").innerText = render(data);
-});
+
+  const roll = Math.floor(Math.random() * 6) + 1;
+
+  const roomRef = doc(db, "rooms", currentRoomId);
+
+  if (currentRoomData.player1 === myUid) {
+    if (currentRoomData.player1Roll == null) {
+      await updateDoc(roomRef, {
+        player1Roll: roll
+      });
+    } else {
+      alert("既にサイコロを振っています");
+      return;
+    }
+  } else {
+    if (currentRoomData.player2Roll == null) {
+      await updateDoc(roomRef, {
+        player2Roll: roll
+      });
+    } else {
+      alert("既にサイコロを振っています");
+      return;
+    }
+  }
+};
+
+async function fetchUserDocByUid(arg_uid) {
+  return await getDoc(doc(db, "users", arg_uid));
+}
 
 // ユーザー状態監視
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    uid = user.uid;
-    console.log("UID:", uid);
+    myUid = user.uid;
+    console.log("UID:", myUid);
+
+    if (!isRoomListenerRunning) {
+      console.log(myUid + "をキーとする部屋の監視を開始");
+      startRoomListener();
+      isRoomListenerRunning = true;
+    }
 
     // Firestoreから名前取得
-    const userDoc = await getDoc(doc(db, "users", uid));
+    const userDoc = await fetchUserDocByUid(myUid);
     if (userDoc.exists()) {
       // 既存ユーザー
       playerName = userDoc.data().name;
     } else if (playerName) {
       // 新規登録直後
-      await setDoc(doc(db, "users", uid), {
+      await setDoc(doc(db, "users", myUid), {
         name: playerName
       });
     }
@@ -176,28 +179,135 @@ onAuthStateChanged(auth, async (user) => {
       document.getElementById("playerName").innerText =
         `プレイヤー名：${playerName}`;
     }
-
-    // const roomRef = doc(db, "rooms", "room1");
-    // const roomSnap = await getDoc(roomRef);
-    // const data = roomSnap.data();
-
-    // if (!data) {
-    //   console.log("firestoreにデータ無し");
-    //   return;
-    // }
-
-    // if (!data.player1) {
-    //   console.log("player1として登録: " + uid);
-    //   await updateDoc(roomRef, { player1: uid });
-    // } else if (!data.player2) {
-    //   console.log("player2として登録: " + uid);
-    //   await updateDoc(roomRef, { player2: uid });
-    // }
-
-    // if (data.player1 === uid || data.player2 === uid) {
-    //   return;
-    // }
   }
 
-  isAuthChecked = true;
+  if (!isAuthChecked) {
+    isAuthChecked = true;
+  }
 });
+
+async function joinQueue() {
+  // ① 自分を待機キューに追加
+  const docRef = await addDoc(collection(db, "waiting"), {
+    uid: myUid,
+    createdAt: Date.now()
+  });
+  // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
+  myWaitingDocId = docRef.id;
+
+  // ② 待機キュー取得
+  const q = query(collection(db, "waiting"), orderBy("createdAt"));
+  const snapshot = await getDocs(q);
+
+  // ③ 2人以上ならマッチング
+  if (snapshot.size >= 2) {
+    const users = snapshot.docs.slice(0, 2);
+
+    const uid1 = users[0].data().uid;
+    const uid2 = users[1].data().uid;
+
+    // ④ room作成
+    const roomRef = await addDoc(collection(db, "rooms"), {
+      players: [uid1, uid2],
+      player1: uid1,
+      player2: uid2,
+      player1Roll: null,
+      player2Roll: null
+    });
+
+    // ⑤ waiting削除
+    for (const docSnap of users) {
+      await deleteDoc(doc(db, "waiting", docSnap.id));
+    }
+
+    console.log("マッチング成功:", roomRef.id);
+  }
+}
+
+async function leaveQueue() {
+  await deleteDoc(doc(db, "waiting", myWaitingDocId));
+}
+
+document.getElementById("randomBtn").onclick = async () => {
+  showScreen("screen-random-match-waiting");
+  await joinQueue();
+};
+
+document.getElementById("randomMatchCancelBtn").onclick = async () => {
+  if (!myWaitingDocId) {
+    alert("マッチング相手待機状態ではありません");
+    return;
+  }
+
+  try {
+    await leaveQueue();
+  } catch (e) {
+    alert("waiting削除失敗");
+    return;
+  }
+  myWaitingDocId = null;
+  showScreen("screen-menu");
+};
+
+function startRoomListener() {
+  const roomQuery = query(
+    collection(db, "rooms"),
+    where("players", "array-contains", myUid)
+  );
+
+  onSnapshot(roomQuery, async (snapshot) => {
+    snapshot.forEach(async (docSnap) => {
+      // ★ すでに入っているなら無視（重複防止）
+      if (currentRoomId) {
+        return;
+      }
+
+      console.log("マッチ成立:", docSnap.id);
+
+      currentRoomId = docSnap.id;
+
+      // ★ waitingから削除（まだ残ってた場合）
+      if (myWaitingDocId) {
+        try {
+          await leaveQueue();
+        } catch (e) {
+          console.log("waiting削除失敗（問題なし）");
+        }
+        myWaitingDocId = null;
+      }
+
+      document.getElementById("randomMatchWaitingNotification").innerText =
+        `相手が見つかりました。3秒後に対戦が始まります`;
+      await sleep(3000);
+      document.getElementById("randomMatchWaitingNotification").innerText = ``;
+
+      // ★ UI表示更新
+      document.getElementById("roomId").innerText =
+        `Room: ${currentRoomId}`;
+      const room = docSnap.data();
+      const opponentId = (room.player1 === myUid) ? room.player2 : room.player1;
+      const opponentDoc = await fetchUserDocByUid(opponentId);
+      opponentName = opponentDoc.data().name;
+      document.getElementById("opponentName").innerText =
+        `相手の名前：${opponentName}`;
+
+      // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
+      startGameListener(currentRoomId);
+
+      // ★ ゲーム画面へ
+      showScreen("screen-game");
+    });
+  });
+}
+
+function startGameListener(roomId) {
+  const roomRef = doc(db, "rooms", roomId);
+
+  onSnapshot(roomRef, async (docSnap) => {
+    const data = docSnap.data();
+    currentRoomData = data;
+
+    // UI更新
+    document.getElementById("result").innerText = render(data);
+  });
+}
