@@ -192,7 +192,7 @@ onAuthStateChanged(auth, async (user) => {
       currentRoomId = userDoc.data().currentRoomId;
     }
     if (!isRoomListenerRunning) {
-      console.log(myUid + "をキーとする部屋の監視を開始");
+      console.log(`${myUid}をキーとする部屋の監視を開始`);
       startRoomListener();
       isRoomListenerRunning = true;
     }
@@ -212,8 +212,7 @@ onAuthStateChanged(auth, async (user) => {
       });
     }
     if (playerName) {
-      document.getElementById("playerName").textContent =
-        `プレイヤー名：${playerName}`;
+      document.getElementById("playerName").textContent = `${playerName}`;
     }
   }
 
