@@ -264,9 +264,7 @@ function startRoomListener() {
 
       console.log("マッチ成立:", docSnap.id);
 
-      // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
       currentRoomId = docSnap.id;
-      startGameListener(currentRoomId);
 
       // ★ waitingから削除（まだ残ってた場合）
       if (myWaitingDocId) {
@@ -292,6 +290,9 @@ function startRoomListener() {
       opponentName = opponentDoc.data().name;
       document.getElementById("opponentName").innerText =
         `相手の名前：${opponentName}`;
+
+      // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
+      startGameListener(currentRoomId);
 
       // ★ ゲーム画面へ
       showScreen("screen-game");
