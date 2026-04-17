@@ -28,7 +28,31 @@ let myWaitingDocId = null;
 let currentRoomId = null;
 let opponentName = null;
 
-const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));//timeはミリ秒
+// timeはミリ秒
+const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
+
+const heartBeatIntervalMilliSec = 3000;
+const disconnectionIntervalMilliSec = 10000;
+
+// 部屋に入っている状態であれば一定の時間間隔で
+// 通信中であることをFirestoreに通知する
+setInterval(async () => {
+  if (!currentRoomId) {
+    return;
+  }
+
+  const roomRef = doc(db, "rooms", currentRoomId);
+
+  await updateDoc(roomRef, {
+    [`lastSeen.${myUid}`]: Date.now()
+  });
+}, heartBeatIntervalMilliSec);
+
+// 一定時間以上更新なしの場合に切断したと判定する
+function isDisconnected(lastSeen) {
+  const now = Date.now();
+  return now - lastSeen >= disconnectionIntervalMilliSec;
+}
 
 function showScreen(screenId) {
   const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
@@ -207,12 +231,14 @@ async function joinQueue() {
     const uid2 = users[1].data().uid;
 
     // ④ room作成
+    const nowDateInteger = Date.now();
     const roomRef = await addDoc(collection(db, "rooms"), {
       players: [uid1, uid2],
       player1: uid1,
       player2: uid2,
       player1Roll: null,
-      player2Roll: null
+      player2Roll: null,
+      lastSeen: { uid1: nowDateInteger, uid2: nowDateInteger }
     });
 
     // ⑤ waiting削除
@@ -248,6 +274,14 @@ document.getElementById("randomMatchCancelBtn").onclick = async () => {
   myWaitingDocId = null;
   showScreen("screen-menu");
 };
+
+function getOpponentId(roomData) {
+  if (roomData.player1 === myUid) {
+    return roomData.player2;
+  } else {
+    return roomData.player1;
+  }
+}
 
 function startRoomListener() {
   const roomQuery = query(
@@ -285,7 +319,7 @@ function startRoomListener() {
       document.getElementById("roomId").innerText =
         `Room: ${currentRoomId}`;
       const room = docSnap.data();
-      const opponentId = (room.player1 === myUid) ? room.player2 : room.player1;
+      const opponentId = getOpponentId(room);
       const opponentDoc = await fetchUserDocByUid(opponentId);
       opponentName = opponentDoc.data().name;
       document.getElementById("opponentName").innerText =
@@ -309,5 +343,12 @@ function startGameListener(roomId) {
 
     // UI更新
     document.getElementById("result").innerText = render(data);
+
+    const opponentId = getOpponentId(data);
+    const opponentLastSeen = data.lastSeen?.[opponentId];
+    if (opponentLastSeen && isDisconnected(opponentLastSeen)) {
+      document.getElementById("result").innerText =
+        "相手が切断しました";
+    }
   });
 }
