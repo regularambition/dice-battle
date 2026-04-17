@@ -26,6 +26,7 @@ let isRoomListenerRunning = false;
 let playerName = null;
 let myWaitingDocId = null;
 let currentRoomId = null;
+let opponentName = null;
 
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));//timeはミリ秒
 
@@ -93,22 +94,25 @@ document.getElementById("nameSubmit").onclick = async () => {
   showScreen("screen-menu");
 };
 
-function get_result_msg(p1roll, p2roll) {
-  if (p1roll > p2roll) {
-    return "p1 won";
-  } else if (p1roll < p2roll) {
-    return "p2 won";
+function get_result_msg(myRoll, opponentRoll) {
+  if (myRoll > opponentRoll) {
+    return "YOU WIN!!!";
+  } else if (myRoll < opponentRoll) {
+    return "you lose...";
   } else {
     return "draw";
   }
 }
 
 function render(data) {
-  if (data.player1Roll != null && data.player2Roll != null) {
-    const result = get_result_msg(data.player1Roll, data.player2Roll);
-    return `P1: ${data.player1Roll}, P2: ${data.player2Roll} -> ${result}`;
+  const myRoll = (data.player1 === myUid) ? data.player1Roll : data.player2Roll;
+  const opponentRoll = (data.player1 === myUid) ? data.player2Roll : data.player1Roll;
+
+  if (myRoll != null && opponentRoll != null) {
+    const result = get_result_msg(myRoll, opponentRoll);
+    return `you: ${myRoll}, ${opponentName}: ${opponentRoll} -> ${result}`;
   } else {
-    return `P1: ${data.player1Roll ?? "waiting"}, P2: ${data.player2Roll ?? "waiting"}`;
+    return `you: ${myRoll ?? "waiting"}, ${opponentName}: ${opponentRoll ?? "waiting"}`;
   }
 }
 
@@ -208,8 +212,7 @@ async function joinQueue() {
       player1: uid1,
       player2: uid2,
       player1Roll: null,
-      player2Roll: null,
-      result: null
+      player2Roll: null
     });
 
     // ⑤ waiting削除
@@ -286,8 +289,9 @@ function startRoomListener() {
       const room = docSnap.data();
       const opponentId = (room.player1 === myUid) ? room.player2 : room.player1;
       const opponentDoc = await fetchUserDocByUid(opponentId);
+      opponentName = opponentDoc.data().name;
       document.getElementById("opponentName").innerText =
-        `相手の名前：${opponentDoc.data().name}`;
+        `相手の名前：${opponentName}`;
 
       // ★ ゲーム画面へ
       showScreen("screen-game");
@@ -301,12 +305,6 @@ function startGameListener(roomId) {
   onSnapshot(roomRef, async (docSnap) => {
     const data = docSnap.data();
     currentRoomData = data;
-
-    // 勝敗確定
-    if (data.player1Roll != null && data.player2Roll != null && !data.result) {
-      const result = get_result_msg(data.player1Roll, data.player2Roll);
-      await updateDoc(roomRef, { result });
-    }
 
     // UI更新
     document.getElementById("result").innerText = render(data);
