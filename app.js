@@ -182,17 +182,29 @@ onAuthStateChanged(auth, async (user) => {
     myUid = user.uid;
     console.log("UID:", myUid);
 
+    // Firestoreから名前取得
+    const userDoc = await fetchUserDocByUid(myUid);
+
+    // 切断した後に再接続してきた場合は即座に
+    // currentRoomIdに値を入れてstartRoomListener内における
+    // onSnapshotの処理を抑止する
+    if (userDoc.exists() && userDoc.data().currentRoomId) {
+      currentRoomId = userDoc.data().currentRoomId;
+    }
     if (!isRoomListenerRunning) {
       console.log(myUid + "をキーとする部屋の監視を開始");
       startRoomListener();
       isRoomListenerRunning = true;
     }
 
-    // Firestoreから名前取得
-    const userDoc = await fetchUserDocByUid(myUid);
     if (userDoc.exists()) {
       // 既存ユーザー
       playerName = userDoc.data().name;
+
+      if (userDoc.data().currentRoomId) {
+        startGameListener(currentRoomId);
+        showScreen("screen-game");
+      }
     } else if (playerName) {
       // 新規登録直後
       await setDoc(doc(db, "users", myUid), {
@@ -238,7 +250,6 @@ async function joinQueue() {
       player2: uid2,
       player1Roll: null,
       player2Roll: null,
-      // lastSeen: { uid1: nowDateInteger, uid2: nowDateInteger }
       lastSeen: {}
     });
 
@@ -300,6 +311,9 @@ function startRoomListener() {
       console.log("マッチ成立:", docSnap.id);
 
       currentRoomId = docSnap.id;
+      await updateDoc(doc(db, "users", myUid), {
+        currentRoomId: currentRoomId
+      });
 
       // ★ waitingから削除（まだ残ってた場合）
       if (myWaitingDocId) {
