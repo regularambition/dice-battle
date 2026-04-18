@@ -40,6 +40,7 @@ const heartBeatIntervalMilliSec = 3000;
 const disconnectionIntervalMilliSec = 10000;
 const rematchDeadlineMilliSec = 20000;
 const rematchRemainingTimeIntervalMilliSec = 1000;
+const reconnectDurationMilliSec = 15000;
 
 function quitIntervalRepeating(id) {
   if (id != null) {
@@ -289,13 +290,17 @@ async function joinQueue() {
     const uid2 = users[1].data().uid;
 
     // ④ room作成
+    const currentUnixTime = await getPublicServerTime();
     const roomRef = await addDoc(collection(db, "rooms"), {
       players: [uid1, uid2],
       player1: uid1,
       player2: uid2,
       player1Roll: null,
       player2Roll: null,
-      lastSeen: {},
+      lastSeen: {
+        [uid1]: currentUnixTime,
+        [uid2]: currentUnixTime
+      },
       rematch: {},
       rematchDeadline: null,
       state: room_states.playing
@@ -412,12 +417,18 @@ function stopRoomListener() {
   }
 }
 
+async function cannotReconnectAnyLonger(canReconnectUntil) {
+  const now = await getPublicServerTime();
+  return now >= canReconnectUntil;
+}
+
 function startGameListener(roomId) {
   if (unsubscribeGameListener) {
     return;
   }
   console.log("gameListener起動成功");
   const roomRef = doc(db, "rooms", roomId);
+  console.log(roomRef);
 
   unsubscribeGameListener = onSnapshot(roomRef, async (docSnap) => {
     console.log("gameListenerが呼ばれました");
@@ -438,8 +449,37 @@ function startGameListener(roomId) {
       console.log("roomId, opponentNameのUI表示完了（最初の1回のみ実行されるはず）");
     }
     document.getElementById("result").textContent = render(data);
-    document.getElementById("opponentConnectionNotification").textContent =
-      (opponentLastSeen && await isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
+
+    if (data.state === room_states.reconnect_wait) {
+      if (await cannotReconnectAnyLonger(data.canReconnectUntil)) {
+        console.log("相手が再接続許可期限切れのため強制解散");
+        currentRoomData.player1 = myUid;
+        await bye(roomId, currentRoomData);
+        return;
+      }
+      return;
+    }
+
+    if (await isDisconnected(opponentLastSeen)) {
+      // 切断時の扱い
+      document.getElementById("opponentConnectionNotification").textContent = "相手の接続が切れました";
+
+      if (data.state === room_states.rematch_wait) {
+        console.log("相手が再戦希望選択中に接続を切ったため強制解散");
+        currentRoomData.player1 = myUid;
+        await bye(roomId, currentRoomData);
+        return;
+      }
+
+      if (data.state === room_states.playing) {
+        await updateDoc(roomRef, {
+          state: room_states.reconnect_wait,
+          canReconnectUntil: await getPublicServerTime() + reconnectDurationMilliSec
+        });
+      }
+    } else {
+      document.getElementById("opponentConnectionNotification").textContent = "";
+    }
 
     if (data.state === room_states.playing && myUid === data.player1 && data.player1Roll != null && data.player2Roll != null) {
       await updateDoc(roomRef, {
