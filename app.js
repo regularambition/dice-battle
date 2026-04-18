@@ -1,5 +1,6 @@
 // Firebase読み込み
 import { db, auth } from "./firebase.js";
+import { getPublicServerTime } from "./current_time_getter.js";
 import {
   doc,
   updateDoc,
@@ -47,13 +48,13 @@ setInterval(async () => {
   const roomRef = doc(db, "rooms", currentRoomId);
 
   await updateDoc(roomRef, {
-    [`lastSeen.${myUid}`]: Date.now()
+    [`lastSeen.${myUid}`]: getPublicServerTime()
   });
 }, heartBeatIntervalMilliSec);
 
 // 一定時間以上更新なしの場合に切断したと判定する
 function isDisconnected(lastSeen) {
-  const now = Date.now();
+  const now = getPublicServerTime();
   return now - lastSeen >= disconnectionIntervalMilliSec;
 }
 
@@ -62,7 +63,7 @@ setInterval(() => {
     return;
   }
 
-  const now = Date.now();
+  const now = getPublicServerTime();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
   document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
 }, rematchRemainingTimeIntervalMilliSec);
@@ -260,7 +261,7 @@ async function joinQueue() {
   // ① 自分を待機キューに追加
   const docRef = await addDoc(collection(db, "waiting"), {
     uid: myUid,
-    createdAt: Date.now()
+    createdAt: getPublicServerTime()
   });
   // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
   myWaitingDocId = docRef.id;
@@ -424,14 +425,14 @@ function startGameListener(roomId) {
     document.getElementById("opponentConnectionNotification").textContent =
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
-    if (data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
+    if (myUid === data.player1 && data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
       await updateDoc(roomRef, {
-        rematchDeadline: Date.now() + rematchDeadlineMilliSec
+        rematchDeadline: getPublicServerTime() + rematchDeadlineMilliSec
       });
     }
 
     // 再戦・解散の処理
-    if (data.rematchDeadline != null && Date.now() >= data.rematchDeadline) {
+    if (data.rematchDeadline != null && getPublicServerTime() >= data.rematchDeadline) {
       // 選択肢が表示されてから一定時間が経過すると強制解散
       console.log("時間切れのため強制解散");
       await bye(roomId, data);
@@ -492,7 +493,7 @@ async function bye(roomId, roomData) {
 
   currentRoomId = null;
   currentRoomData = null;
-  await stopGameListener(roomId, (myUid === roomData.player2));
+  await stopGameListener(roomId, (myUid === roomData.player1));
   document.getElementById("rematchStatus").textContent =
     `再戦が希望されなかったため3秒後にメニュー画面へ戻ります`;
   await sleep(3000);
@@ -502,12 +503,12 @@ async function bye(roomId, roomData) {
   showScreen("screen-menu");
 }
 
-async function stopGameListener(roomId, isRoomDestroyer) {
+async function stopGameListener(roomId, isRoomRemover) {
   if (unsubscribeGameListener) {
     unsubscribeGameListener();
     unsubscribeGameListener = null;
 
-    if (isRoomDestroyer) {
+    if (isRoomRemover) {
       await deleteDoc(doc(db, "rooms", roomId));
       console.log(`部屋${roomId}の削除成功`);
     }
