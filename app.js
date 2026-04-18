@@ -440,6 +440,7 @@ function startGameListener(roomId) {
         document.getElementById("rematchStatus").textContent =
           `再戦が希望されなかったため3秒後にメニュー画面へ戻ります`;
         await sleep(3000);
+        document.getElementById("rematchArea").style.display = "none";
         showScreen("screen-menu");
       }
     }
@@ -453,6 +454,7 @@ async function stopGameListener(roomId, isRoomDestroyer) {
 
     if (isRoomDestroyer) {
       await deleteDoc(doc(db, "rooms", roomId));
+      console.log(`部屋${roomId}の削除成功`);
     }
     console.log("gameListener停止成功");
   }
