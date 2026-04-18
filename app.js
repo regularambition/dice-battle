@@ -421,6 +421,7 @@ function startGameListener(roomId) {
     // 再戦・解散の処理
     if (Date.now() >= data.rematchDeadline) {
       // 選択肢が表示されてから一定時間が経過すると強制解散
+      console.log("時間切れのため強制解散");
       await bye(roomId, data);
       return;
     }
