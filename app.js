@@ -26,6 +26,7 @@ let playerName = null;
 let myWaitingDocId = null;
 let currentRoomId = null;
 let unsubscribeRoomListener = null;
+let unsubscribeGameListener = null;
 
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -133,6 +134,12 @@ function render(data) {
   const opponentName = document.getElementById("opponentName").textContent;
 
   if (myRoll != null && opponentRoll != null) {
+    const rematchArea = document.getElementById("rematchArea");
+    if (rematchArea.style.display === "none") {
+      rematchArea.style.display = "block";
+      console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
+    }
+
     const result = get_result_msg(myRoll, opponentRoll);
     return `you: ${myRoll}, ${opponentName}: ${opponentRoll} -> ${result}`;
   } else {
@@ -170,6 +177,30 @@ document.getElementById("rollBtn").onclick = async () => {
       return;
     }
   }
+};
+
+document.getElementById("rematchBtn").onclick = async () => {
+  if (currentRoomData.rematch?.[myUid] != null) {
+    alert(`既に選択済みです: ${currentRoomData.rematch?.[myUid]}`);
+    return;
+  }
+
+  const roomRef = doc(db, "rooms", currentRoomId);
+  await updateDoc(roomRef, {
+    [`rematch.${myUid}`]: true
+  });
+};
+
+document.getElementById("leaveBtn").onclick = async () => {
+  if (currentRoomData.rematch?.[myUid] != null) {
+    alert(`既に選択済みです: ${currentRoomData.rematch?.[myUid]}`);
+    return;
+  }
+
+  const roomRef = doc(db, "rooms", currentRoomId);
+  await updateDoc(roomRef, {
+    [`rematch.${myUid}`]: false
+  });
 };
 
 async function fetchUserDocByUid(arg_uid) {
@@ -237,7 +268,8 @@ async function joinQueue() {
       player2: uid2,
       player1Roll: null,
       player2Roll: null,
-      lastSeen: {}
+      lastSeen: {},
+      rematch: {}
     });
 
     // ⑤ waiting削除
@@ -348,9 +380,15 @@ function stopRoomListener() {
 }
 
 function startGameListener(roomId) {
+  if (unsubscribeGameListener) {
+    return;
+  }
+  console.log("gameListener起動成功");
   const roomRef = doc(db, "rooms", roomId);
 
-  onSnapshot(roomRef, async (docSnap) => {
+  unsubscribeGameListener = onSnapshot(roomRef, async (docSnap) => {
+    console.log("gameListenerが呼ばれました");
+
     const data = docSnap.data();
     currentRoomData = data;
 
@@ -369,5 +407,53 @@ function startGameListener(roomId) {
     document.getElementById("result").textContent = render(data);
     document.getElementById("opponentConnectionNotification").textContent =
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
+
+    const rematch = data.rematch;
+    if (rematch) {
+      const myChoice = rematch[myUid];
+      const opponentChoice = rematch[opponentId];
+
+      // 状態表示
+      document.getElementById("rematchStatus").textContent =
+        `あなた: ${myChoice ?? "未選択"} / 相手: ${opponentChoice ?? "未選択"}`;
+
+      if (myChoice == null || opponentChoice == null) {
+        console.log("まだ二人の再戦選択が揃っていません");
+      } else if (myChoice && opponentChoice) {
+        // 両者true → リマッチ
+        await updateDoc(roomRef, {
+          player1Roll: null,
+          player2Roll: null,
+          rematch: null
+        });
+        console.log("二人とも再戦を希望しました");
+        document.getElementById("rematchArea").style.display = "none";
+      } else {
+        // どちらかfalse → 解散
+        await updateDoc(doc(db, "users", myUid), {
+          currentRoomId: null
+        });
+
+        currentRoomId = null;
+        currentRoomData = null;
+        await stopGameListener(roomId, (myUid === data.player2));
+        document.getElementById("rematchStatus").textContent =
+          `再戦が希望されなかったため3秒後にメニュー画面へ戻ります`;
+        await sleep(3000);
+        showScreen("screen-menu");
+      }
+    }
   });
+}
+
+async function stopGameListener(roomId, isRoomDestroyer) {
+  if (unsubscribeGameListener) {
+    unsubscribeGameListener();
+    unsubscribeGameListener = null;
+
+    if (isRoomDestroyer) {
+      await deleteDoc(doc(db, "rooms", roomId));
+    }
+    console.log("gameListener停止成功");
+  }
 }
