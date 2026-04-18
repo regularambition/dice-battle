@@ -12,8 +12,7 @@ import {
   getDocs,
   query,
   orderBy,
-  deleteDoc,
-  serverTimestamp
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
@@ -33,10 +32,10 @@ let isRematchChoiceFixed = true;
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
 
-const heartBeatIntervalMs = 3000;
-const disconnectionIntervalMs = 10000;
-const rematchDeadlineMs = 20000;
-const rematchRemainingTimeIntervalMs = 1000;
+const heartBeatIntervalMilliSec = 3000;
+const disconnectionIntervalMilliSec = 10000;
+const rematchDeadlineMilliSec = 20000;
+const rematchRemainingTimeIntervalMilliSec = 1000;
 
 // 部屋に入っている状態であれば一定の時間間隔で
 // 通信中であることをFirestoreに通知する
@@ -45,26 +44,17 @@ setInterval(async () => {
     return;
   }
 
-  console.log(serverTimestamp());
   const roomRef = doc(db, "rooms", currentRoomId);
 
   await updateDoc(roomRef, {
-    [`lastSeen.${myUid}`]: serverTimestamp()
+    [`lastSeen.${myUid}`]: Date.now()
   });
-}, heartBeatIntervalMs);
+}, heartBeatIntervalMilliSec);
 
 // 一定時間以上更新なしの場合に切断したと判定する
 function isDisconnected(lastSeen) {
-  const now = serverTimestamp().toDate();
-
-  const lastSeenMs =
-    typeof lastSeen === "number"
-      ? lastSeen
-      : lastSeen.toDate();
-
-  console.log(`now = ${now}`);
-  console.log(`lastSeenMs = ${lastSeenMs}`);
-  return now - lastSeenMs >= disconnectionIntervalMs;
+  const now = Date.now();
+  return now - lastSeen >= disconnectionIntervalMilliSec;
 }
 
 setInterval(() => {
@@ -72,10 +62,10 @@ setInterval(() => {
     return;
   }
 
-  const now = serverTimestamp();
+  const now = Date.now();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
-  document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMs)}`;
-}, rematchRemainingTimeIntervalMs);
+  document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
+}, rematchRemainingTimeIntervalMilliSec);
 
 function showScreen(screenId) {
   const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
@@ -270,7 +260,7 @@ async function joinQueue() {
   // ① 自分を待機キューに追加
   const docRef = await addDoc(collection(db, "waiting"), {
     uid: myUid,
-    createdAt: serverTimestamp()
+    createdAt: Date.now()
   });
   // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
   myWaitingDocId = docRef.id;
@@ -293,10 +283,7 @@ async function joinQueue() {
       player2: uid2,
       player1Roll: null,
       player2Roll: null,
-      lastSeen: {
-        [uid1]: serverTimestamp(),
-        [uid2]: serverTimestamp()
-      },
+      lastSeen: {},
       rematch: null,
       rematchDeadline: null
     });
@@ -438,16 +425,13 @@ function startGameListener(roomId) {
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
     if (data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
-      if (myUid === data.player2) {
-        await updateDoc(roomRef, {
-          rematchDeadline: serverTimestamp() + rematchDeadlineMs
-        });
-        console.log("再戦希望選択期限設定完了");
-      }
+      await updateDoc(roomRef, {
+        rematchDeadline: Date.now() + rematchDeadlineMilliSec
+      });
     }
 
     // 再戦・解散の処理
-    if (data.rematchDeadline != null && serverTimestamp() >= data.rematchDeadline) {
+    if (data.rematchDeadline != null && Date.now() >= data.rematchDeadline) {
       // 選択肢が表示されてから一定時間が経過すると強制解散
       console.log("時間切れのため強制解散");
       await bye(roomId, data);
