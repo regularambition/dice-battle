@@ -143,10 +143,6 @@ function render(data) {
       console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
     }
 
-    if (data.rematchDeadline == null) {
-      data.rematchDeadline = Date.now() + rematchDeadlineMilliSec;
-    }
-
     const result = get_result_msg(myRoll, opponentRoll);
     return `you: ${myRoll}, ${opponentName}: ${opponentRoll} -> ${result}`;
   } else {
@@ -418,12 +414,24 @@ function startGameListener(roomId) {
     document.getElementById("opponentConnectionNotification").textContent =
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
+    if (data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
+      await updateDoc(roomRef, {
+        rematchDeadline: Date.now() + rematchDeadlineMilliSec
+      });
+    }
+
     // 再戦・解散の処理
-    if (data.rematchDeadline != null && Date.now() >= data.rematchDeadline) {
-      // 選択肢が表示されてから一定時間が経過すると強制解散
-      console.log("時間切れのため強制解散");
-      await bye(roomId, data);
-      return;
+    if (data.rematchDeadline != null) {
+      const now = Date.now();
+      if (now >= data.rematchDeadline) {
+        // 選択肢が表示されてから一定時間が経過すると強制解散
+        console.log("時間切れのため強制解散");
+        await bye(roomId, data);
+        return;
+      }
+
+      const remaining = Math.max(0, data.rematchDeadline - now);
+      document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / 1000)}`;
     }
     const rematch = data.rematch;
     if (rematch) {
@@ -446,11 +454,6 @@ function startGameListener(roomId) {
           console.log("まだ二人の再戦選択が揃っていません");
         } else if (opponentChoice) {
           // 再戦
-          document.getElementById("rematchStatus").textContent =
-            `再戦が希望されたため3秒後に開始されます`;
-          await sleep(3000);
-          document.getElementById("rematchStatus").textContent = ``;
-
           await updateDoc(roomRef, {
             player1Roll: null,
             player2Roll: null,
@@ -458,6 +461,11 @@ function startGameListener(roomId) {
             rematchDeadline: null
           });
           console.log("二人とも再戦を希望しました");
+
+          document.getElementById("rematchStatus").textContent =
+            `再戦が希望されたため3秒後に開始されます`;
+          await sleep(3000);
+          document.getElementById("rematchStatus").textContent = ``;
           document.getElementById("rematchArea").style.display = "none";
         } else {
           // 解散
