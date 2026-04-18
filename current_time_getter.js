@@ -3,7 +3,7 @@
  * 端末時刻設定変更による不正が容易なためこちらを呼び出して現在時刻を取得する
  * @returns Time.Now World Time API 準拠のミリ秒単位UNIX時間
  */
-async function getPublicServerTime() {
+export async function getPublicServerTime() {
     let res = Date.now();
     let remaining_retry = 5;
     while (remaining_retry > 0) {
