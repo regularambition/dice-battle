@@ -445,6 +445,7 @@ function startGameListener(roomId) {
         document.getElementById("rematchStatus").textContent =
           `再戦が希望されなかったため3秒後にメニュー画面へ戻ります`;
         await sleep(3000);
+        document.getElementById("roomId").textContent = ``;
         document.getElementById("rematchStatus").textContent = ``;
         document.getElementById("rematchArea").style.display = "none";
         showScreen("screen-menu");
