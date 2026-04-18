@@ -417,41 +417,58 @@ function startGameListener(roomId) {
       document.getElementById("rematchStatus").textContent =
         `あなた: ${myChoice ?? "未選択"} / 相手: ${opponentChoice ?? "未選択"}`;
 
-      if (myChoice == null || opponentChoice == null) {
-        console.log("まだ二人の再戦選択が揃っていません");
-      } else if (myChoice && opponentChoice) {
-        // 両者true → リマッチ
-        document.getElementById("rematchStatus").textContent =
-          `再戦が希望されたため3秒後に開始されます`;
-        await sleep(3000);
-        document.getElementById("rematchStatus").textContent = ``;
+      if (myChoice == null) {
+        if (opponentChoice === false) {
+          // 解散
+          await bye(roomId, data);
+        } else {
+          console.log("まだ二人の再戦選択が揃っていません");
+        }
+      } else if (myChoice) {
+        if (opponentChoice == null) {
+          console.log("まだ二人の再戦選択が揃っていません");
+        } else if (opponentChoice) {
+          // 再戦
+          document.getElementById("rematchStatus").textContent =
+            `再戦が希望されたため3秒後に開始されます`;
+          await sleep(3000);
+          document.getElementById("rematchStatus").textContent = ``;
 
-        await updateDoc(roomRef, {
-          player1Roll: null,
-          player2Roll: null,
-          rematch: null
-        });
-        console.log("二人とも再戦を希望しました");
-        document.getElementById("rematchArea").style.display = "none";
+          await updateDoc(roomRef, {
+            player1Roll: null,
+            player2Roll: null,
+            rematch: null
+          });
+          console.log("二人とも再戦を希望しました");
+          document.getElementById("rematchArea").style.display = "none";
+        } else {
+          // 解散
+          await bye(roomId, data);
+        }
       } else {
-        // どちらかfalse → 解散
-        await updateDoc(doc(db, "users", myUid), {
-          currentRoomId: null
-        });
-
-        currentRoomId = null;
-        currentRoomData = null;
-        await stopGameListener(roomId, (myUid === data.player2));
-        document.getElementById("rematchStatus").textContent =
-          `再戦が希望されなかったため3秒後にメニュー画面へ戻ります`;
-        await sleep(3000);
-        document.getElementById("roomId").textContent = ``;
-        document.getElementById("rematchStatus").textContent = ``;
-        document.getElementById("rematchArea").style.display = "none";
-        showScreen("screen-menu");
+        // 解散
+        await bye(roomId, data);
       }
     }
   });
+}
+
+// 再戦を希望しない時の解散処理
+async function bye(roomId, roomData) {
+  await updateDoc(doc(db, "users", myUid), {
+    currentRoomId: null
+  });
+
+  currentRoomId = null;
+  currentRoomData = null;
+  await stopGameListener(roomId, (myUid === roomData.player2));
+  document.getElementById("rematchStatus").textContent =
+    `再戦が希望されなかったため3秒後にメニュー画面へ戻ります`;
+  await sleep(3000);
+  document.getElementById("roomId").textContent = ``;
+  document.getElementById("rematchStatus").textContent = ``;
+  document.getElementById("rematchArea").style.display = "none";
+  showScreen("screen-menu");
 }
 
 async function stopGameListener(roomId, isRoomDestroyer) {
