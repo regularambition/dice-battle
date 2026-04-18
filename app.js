@@ -136,7 +136,7 @@ function render(data) {
 
   if (myRoll != null && opponentRoll != null) {
     const rematchArea = document.getElementById("rematchArea");
-    if (isRematchChoiceFixed) {
+    if (rematchArea.style.display === "none") {
       isRematchChoiceFixed = false;
       rematchArea.style.display = "block";
       console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
