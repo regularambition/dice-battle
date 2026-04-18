@@ -53,12 +53,12 @@ setInterval(async () => {
 }, heartBeatIntervalMilliSec);
 
 // 一定時間以上更新なしの場合に切断したと判定する
-function isDisconnected(lastSeen) {
+async function isDisconnected(lastSeen) {
   const now = await getPublicServerTime();
   return now - lastSeen >= disconnectionIntervalMilliSec;
 }
 
-setInterval(() => {
+setInterval(async () => {
   if (!currentRoomData || !currentRoomData?.rematchDeadline) {
     return;
   }
@@ -423,7 +423,7 @@ function startGameListener(roomId) {
     }
     document.getElementById("result").textContent = render(data);
     document.getElementById("opponentConnectionNotification").textContent =
-      (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
+      (opponentLastSeen && await isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
     if (myUid === data.player1 && data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
       await updateDoc(roomRef, {
