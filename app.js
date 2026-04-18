@@ -33,10 +33,10 @@ let isRematchChoiceFixed = true;
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
 
-const heartBeatIntervalMilliSec = 3000;
-const disconnectionIntervalMilliSec = 10000;
-const rematchDeadlineMilliSec = 20000;
-const rematchRemainingTimeIntervalMilliSec = 1000;
+const heartBeatIntervalMs = 3000;
+const disconnectionIntervalMs = 10000;
+const rematchDeadlineMs = 20000;
+const rematchRemainingTimeIntervalMs = 1000;
 
 // 部屋に入っている状態であれば一定の時間間隔で
 // 通信中であることをFirestoreに通知する
@@ -51,17 +51,20 @@ setInterval(async () => {
   await updateDoc(roomRef, {
     [`lastSeen.${myUid}`]: serverTimestamp()
   });
-}, heartBeatIntervalMilliSec);
+}, heartBeatIntervalMs);
 
 // 一定時間以上更新なしの場合に切断したと判定する
 function isDisconnected(lastSeen) {
-  const now = serverTimestamp().toMillis();
+  const now = serverTimestamp().toDate();
 
   const lastSeenMs =
     typeof lastSeen === "number"
       ? lastSeen
-      : lastSeen.toMillis();
-  return now - lastSeenMs >= disconnectionIntervalMilliSec;
+      : lastSeen.toDate();
+
+  console.log(`now = ${now}`);
+  console.log(`lastSeenMs = ${lastSeenMss}`);
+  return now - lastSeenMs >= disconnectionIntervalMs;
 }
 
 setInterval(() => {
@@ -71,8 +74,8 @@ setInterval(() => {
 
   const now = serverTimestamp();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
-  document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
-}, rematchRemainingTimeIntervalMilliSec);
+  document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMs)}`;
+}, rematchRemainingTimeIntervalMs);
 
 function showScreen(screenId) {
   const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
@@ -437,7 +440,7 @@ function startGameListener(roomId) {
     if (data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
       if (myUid === data.player2) {
         await updateDoc(roomRef, {
-          rematchDeadline: serverTimestamp() + rematchDeadlineMilliSec
+          rematchDeadline: serverTimestamp() + rematchDeadlineMs
         });
         console.log("再戦希望選択期限設定完了");
       }
