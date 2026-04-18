@@ -419,7 +419,7 @@ function startGameListener(roomId) {
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
     // 再戦・解散の処理
-    if (Date.now() >= data.rematchDeadline) {
+    if (data.rematchDeadline != null && Date.now() >= data.rematchDeadline) {
       // 選択肢が表示されてから一定時間が経過すると強制解散
       console.log("時間切れのため強制解散");
       await bye(roomId, data);
