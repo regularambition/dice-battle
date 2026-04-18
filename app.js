@@ -27,6 +27,7 @@ let myWaitingDocId = null;
 let currentRoomId = null;
 let unsubscribeRoomListener = null;
 let unsubscribeGameListener = null;
+let isRematchChoiceFixed = true;
 
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -135,7 +136,8 @@ function render(data) {
 
   if (myRoll != null && opponentRoll != null) {
     const rematchArea = document.getElementById("rematchArea");
-    if (rematchArea.style.display === "none") {
+    if (isRematchChoiceFixed) {
+      isRematchChoiceFixed = false;
       rematchArea.style.display = "block";
       console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
     }
@@ -180,10 +182,11 @@ document.getElementById("rollBtn").onclick = async () => {
 };
 
 document.getElementById("rematchBtn").onclick = async () => {
-  if (currentRoomData.rematch?.[myUid] != null) {
-    alert(`既に選択済みです: ${currentRoomData.rematch?.[myUid]}`);
+  if (isRematchChoiceFixed) {
+    console.log(`既に選択済みまたは再戦・解散が決定済みです`);
     return;
   }
+  isRematchChoiceFixed = true;
 
   const roomRef = doc(db, "rooms", currentRoomId);
   await updateDoc(roomRef, {
@@ -192,10 +195,11 @@ document.getElementById("rematchBtn").onclick = async () => {
 };
 
 document.getElementById("leaveBtn").onclick = async () => {
-  if (currentRoomData.rematch?.[myUid] != null) {
-    alert(`既に選択済みです: ${currentRoomData.rematch?.[myUid]}`);
+  if (isRematchChoiceFixed) {
+    console.log(`既に選択済みまたは再戦・解散が決定済みです`);
     return;
   }
+  isRematchChoiceFixed = true;
 
   const roomRef = doc(db, "rooms", currentRoomId);
   await updateDoc(roomRef, {
@@ -455,6 +459,7 @@ function startGameListener(roomId) {
 
 // 再戦を希望しない時の解散処理
 async function bye(roomId, roomData) {
+  isRematchChoiceFixed = true;
   await updateDoc(doc(db, "users", myUid), {
     currentRoomId: null
   });
