@@ -34,6 +34,7 @@ const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
 
 const heartBeatIntervalMilliSec = 3000;
 const disconnectionIntervalMilliSec = 10000;
+const rematchDeadlineMilliSec = 20000;
 
 // 部屋に入っている状態であれば一定の時間間隔で
 // 通信中であることをFirestoreに通知する
@@ -140,6 +141,10 @@ function render(data) {
       isRematchChoiceFixed = false;
       rematchArea.style.display = "block";
       console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
+    }
+
+    if (data.rematchDeadline == null) {
+      data.rematchDeadline = Date.now() + rematchDeadlineMilliSec;
     }
 
     const result = get_result_msg(myRoll, opponentRoll);
@@ -273,7 +278,8 @@ async function joinQueue() {
       player1Roll: null,
       player2Roll: null,
       lastSeen: {},
-      rematch: null
+      rematch: null,
+      rematchDeadline: null
     });
 
     // ⑤ waiting削除
@@ -412,6 +418,12 @@ function startGameListener(roomId) {
     document.getElementById("opponentConnectionNotification").textContent =
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
+    // 再戦・解散の処理
+    if (Date.now() >= data.rematchDeadline) {
+      // 選択肢が表示されてから一定時間が経過すると強制解散
+      await bye(roomId, data);
+      return;
+    }
     const rematch = data.rematch;
     if (rematch) {
       const myChoice = rematch[myUid];
@@ -441,7 +453,8 @@ function startGameListener(roomId) {
           await updateDoc(roomRef, {
             player1Roll: null,
             player2Roll: null,
-            rematch: null
+            rematch: null,
+            rematchDeadline: null
           });
           console.log("二人とも再戦を希望しました");
           document.getElementById("rematchArea").style.display = "none";
