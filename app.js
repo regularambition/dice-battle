@@ -55,8 +55,13 @@ setInterval(async () => {
 
 // 一定時間以上更新なしの場合に切断したと判定する
 function isDisconnected(lastSeen) {
-  const now = serverTimestamp();
-  return now - lastSeen >= disconnectionIntervalMilliSec;
+  const now = serverTimestamp().toMillis();
+
+  const lastSeenMs =
+    typeof lastSeen === "number"
+      ? lastSeen
+      : lastSeen.toMillis();
+  return now - lastSeenMs >= disconnectionIntervalMilliSec;
 }
 
 setInterval(() => {
