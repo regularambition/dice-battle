@@ -507,9 +507,6 @@ async function bye(roomId, roomData) {
     currentRoomId: null
   });
 
-  currentRoomId = null;
-  currentRoomData = null;
-
   quitIntervalRepeating(heartBeatId);
   quitIntervalRepeating(displayRematchUiId);
   heartBeatId = null;
@@ -522,6 +519,10 @@ async function bye(roomId, roomData) {
   document.getElementById("roomId").textContent = ``;
   document.getElementById("rematchStatus").textContent = ``;
   document.getElementById("rematchArea").style.display = "none";
+
+  currentRoomId = null;
+  currentRoomData = null;
+
   showScreen("screen-menu");
 }
 
