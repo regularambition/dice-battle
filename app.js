@@ -53,6 +53,7 @@ async function heartBeat() {
   if (!currentRoomId) {
     return;
   }
+  console.log("heartBeatが呼ばれました");
 
   const roomRef = doc(db, "rooms", currentRoomId);
 
@@ -71,6 +72,7 @@ async function displayRematchUi() {
   if (!currentRoomData || !currentRoomData?.rematchDeadline) {
     return;
   }
+  console.log("displayRematchUiが呼ばれました");
 
   const now = await getPublicServerTime();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
@@ -294,7 +296,7 @@ async function joinQueue() {
       player1Roll: null,
       player2Roll: null,
       lastSeen: {},
-      rematch: null,
+      rematch: {},
       rematchDeadline: null,
       state: room_states.playing
     });
@@ -442,19 +444,21 @@ function startGameListener(roomId) {
     if (data.state === room_states.playing && myUid === data.player1 && data.player1Roll != null && data.player2Roll != null) {
       await updateDoc(roomRef, {
         state: room_states.rematch_wait,
+        rematch: {},
         rematchDeadline: await getPublicServerTime() + rematchDeadlineMilliSec
       });
     }
 
     // 再戦・解散の処理
-    if (data.state === room_states.rematch_wait && await getPublicServerTime() >= data.rematchDeadline) {
-      // 選択肢が表示されてから一定時間が経過すると強制解散
-      console.log("時間切れのため強制解散");
-      await bye(roomId, data);
-      return;
-    }
-    const rematch = data.rematch;
-    if (rematch) {
+    if (data.state === room_states.rematch_wait) {
+      if (await getPublicServerTime() >= data.rematchDeadline) {
+        // 選択肢が表示されてから一定時間が経過すると強制解散
+        console.log("時間切れのため強制解散");
+        await bye(roomId, data);
+        return;
+      }
+
+      const rematch = data.rematch;
       const myChoice = rematch[myUid];
       const opponentChoice = rematch[opponentId];
 
@@ -478,7 +482,7 @@ function startGameListener(roomId) {
             player1Roll: null,
             player2Roll: null,
             state: room_states.playing,
-            rematch: null,
+            rematch: {},
             rematchDeadline: null
           });
           console.log("二人とも再戦を希望しました");
