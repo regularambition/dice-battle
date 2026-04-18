@@ -12,7 +12,8 @@ import {
   getDocs,
   query,
   orderBy,
-  deleteDoc
+  deleteDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
@@ -44,16 +45,17 @@ setInterval(async () => {
     return;
   }
 
+  console.log(serverTimestamp());
   const roomRef = doc(db, "rooms", currentRoomId);
 
   await updateDoc(roomRef, {
-    [`lastSeen.${myUid}`]: Date.now()
+    [`lastSeen.${myUid}`]: serverTimestamp()
   });
 }, heartBeatIntervalMilliSec);
 
 // 一定時間以上更新なしの場合に切断したと判定する
 function isDisconnected(lastSeen) {
-  const now = Date.now();
+  const now = serverTimestamp();
   return now - lastSeen >= disconnectionIntervalMilliSec;
 }
 
@@ -62,7 +64,7 @@ setInterval(() => {
     return;
   }
 
-  const now = Date.now();
+  const now = serverTimestamp();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
   document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
 }, rematchRemainingTimeIntervalMilliSec);
@@ -260,7 +262,7 @@ async function joinQueue() {
   // ① 自分を待機キューに追加
   const docRef = await addDoc(collection(db, "waiting"), {
     uid: myUid,
-    createdAt: Date.now()
+    createdAt: serverTimestamp()
   });
   // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
   myWaitingDocId = docRef.id;
@@ -283,7 +285,10 @@ async function joinQueue() {
       player2: uid2,
       player1Roll: null,
       player2Roll: null,
-      lastSeen: {},
+      lastSeen: {
+        [uid1]: serverTimestamp(),
+        [uid2]: serverTimestamp()
+      },
       rematch: null,
       rematchDeadline: null
     });
@@ -425,13 +430,16 @@ function startGameListener(roomId) {
       (opponentLastSeen && isDisconnected(opponentLastSeen)) ? "相手の接続が切れました" : "";
 
     if (data.rematchDeadline == null && data.player1Roll != null && data.player2Roll != null) {
-      await updateDoc(roomRef, {
-        rematchDeadline: Date.now() + rematchDeadlineMilliSec
-      });
+      if (myUid === data.player2) {
+        await updateDoc(roomRef, {
+          rematchDeadline: serverTimestamp() + rematchDeadlineMilliSec
+        });
+        console.log("再戦希望選択期限設定完了");
+      }
     }
 
     // 再戦・解散の処理
-    if (data.rematchDeadline != null && Date.now() >= data.rematchDeadline) {
+    if (data.rematchDeadline != null && serverTimestamp() >= data.rematchDeadline) {
       // 選択肢が表示されてから一定時間が経過すると強制解散
       console.log("時間切れのため強制解散");
       await bye(roomId, data);
