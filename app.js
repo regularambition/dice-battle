@@ -35,6 +35,7 @@ const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
 const heartBeatIntervalMilliSec = 3000;
 const disconnectionIntervalMilliSec = 10000;
 const rematchDeadlineMilliSec = 20000;
+const rematchRemainingTimeIntervalMilliSec = 1000;
 
 // 部屋に入っている状態であれば一定の時間間隔で
 // 通信中であることをFirestoreに通知する
@@ -55,6 +56,16 @@ function isDisconnected(lastSeen) {
   const now = Date.now();
   return now - lastSeen >= disconnectionIntervalMilliSec;
 }
+
+setInterval(() => {
+  if (!currentRoomData || !currentRoomData?.rematchDeadline) {
+    return;
+  }
+
+  const now = Date.now();
+  const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
+  document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
+}, rematchRemainingTimeIntervalMilliSec);
 
 function showScreen(screenId) {
   const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
@@ -266,7 +277,6 @@ async function joinQueue() {
     const uid2 = users[1].data().uid;
 
     // ④ room作成
-    const nowDateInteger = Date.now();
     const roomRef = await addDoc(collection(db, "rooms"), {
       players: [uid1, uid2],
       player1: uid1,
@@ -421,17 +431,11 @@ function startGameListener(roomId) {
     }
 
     // 再戦・解散の処理
-    if (data.rematchDeadline != null) {
-      const now = Date.now();
-      if (now >= data.rematchDeadline) {
-        // 選択肢が表示されてから一定時間が経過すると強制解散
-        console.log("時間切れのため強制解散");
-        await bye(roomId, data);
-        return;
-      }
-
-      const remaining = Math.max(0, data.rematchDeadline - now);
-      document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / 1000)}`;
+    if (data.rematchDeadline != null && Date.now() >= data.rematchDeadline) {
+      // 選択肢が表示されてから一定時間が経過すると強制解散
+      console.log("時間切れのため強制解散");
+      await bye(roomId, data);
+      return;
     }
     const rematch = data.rematch;
     if (rematch) {
