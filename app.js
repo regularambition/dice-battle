@@ -63,7 +63,7 @@ function isDisconnected(lastSeen) {
       : lastSeen.toDate();
 
   console.log(`now = ${now}`);
-  console.log(`lastSeenMs = ${lastSeenMss}`);
+  console.log(`lastSeenMs = ${lastSeenMs}`);
   return now - lastSeenMs >= disconnectionIntervalMs;
 }
 
