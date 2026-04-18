@@ -269,7 +269,7 @@ async function joinQueue() {
       player1Roll: null,
       player2Roll: null,
       lastSeen: {},
-      rematch: {}
+      rematch: null
     });
 
     // ⑤ waiting削除
@@ -421,6 +421,10 @@ function startGameListener(roomId) {
         console.log("まだ二人の再戦選択が揃っていません");
       } else if (myChoice && opponentChoice) {
         // 両者true → リマッチ
+        document.getElementById("rematchStatus").textContent =
+          `再戦が希望されたため3秒後に開始されます`;
+        await sleep(3000);
+
         await updateDoc(roomRef, {
           player1Roll: null,
           player2Roll: null,
