@@ -253,7 +253,7 @@ function isReconnectionExpired(roomDoc) {
   const opponentId = getOpponentIdFromRoomData(roomDoc.data());
 
   // 再接続期限時刻は相手の端末が記録しているため真の経過時間に直す
-  delta = data.enteredAt?.[myUid] - data.enteredAt?.[opponentId];
+  delta = roomDoc.data().enteredAt?.[myUid] - roomDoc.data().enteredAt?.[opponentId];
   return roomDoc.data().reconnectExpireAt - (Date.now() - delta) <= reconnectDurationMilliSec;
 }
 
