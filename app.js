@@ -1,6 +1,5 @@
 // Firebase読み込み
 import { db, auth } from "./firebase.js";
-import { getPublicServerTime } from "./current_time_getter.js";
 import { room_states } from "./room_state_enum.js";
 import {
   doc,
@@ -32,6 +31,7 @@ let unsubscribeGameListener = null;
 let isRematchChoiceFixed = true;
 let heartBeatId = null;
 let displayRematchUiId = null;
+let delta = 0;
 
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -58,24 +58,24 @@ async function heartBeat() {
 
   const roomRef = doc(db, "rooms", currentRoomId);
 
-  await updateDoc(roomRef, {
-    [`lastSeen.${myUid}`]: await getPublicServerTime()
+  updateDoc(roomRef, {
+    [`lastSeen.${myUid}`]: Date.now()
   });
 }
 
 // 一定時間以上更新なしの場合に切断したと判定する
-async function isDisconnected(lastSeen) {
-  const now = await getPublicServerTime();
+function isDisconnected(lastSeen) {
+  const now = Date.now() - delta;
   return now - lastSeen >= disconnectionIntervalMilliSec;
 }
 
-async function displayRematchUi() {
+function displayRematchUi() {
   if (!currentRoomData || !currentRoomData?.rematchDeadline) {
     return;
   }
   console.log("displayRematchUiが呼ばれました");
 
-  const now = await getPublicServerTime();
+  const now = Date.now();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
   document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
 }
@@ -185,7 +185,7 @@ document.getElementById("rollBtn").onclick = async () => {
 
   const roomRef = doc(db, "rooms", currentRoomId);
 
-  if (currentRoomData.player1 === myUid) {
+  if (myUid === currentRoomData.player1) {
     if (currentRoomData.player1Roll == null) {
       await updateDoc(roomRef, {
         player1Roll: roll
@@ -214,7 +214,7 @@ document.getElementById("rematchBtn").onclick = async () => {
   isRematchChoiceFixed = true;
 
   const roomRef = doc(db, "rooms", currentRoomId);
-  await updateDoc(roomRef, {
+  updateDoc(roomRef, {
     [`rematch.${myUid}`]: true
   });
 };
@@ -227,7 +227,7 @@ document.getElementById("leaveBtn").onclick = async () => {
   isRematchChoiceFixed = true;
 
   const roomRef = doc(db, "rooms", currentRoomId);
-  await updateDoc(roomRef, {
+  updateDoc(roomRef, {
     [`rematch.${myUid}`]: false
   });
 };
@@ -240,19 +240,21 @@ async function fetchRoomDocById(arg_roomId) {
   return await getDoc(doc(db, "rooms", arg_roomId));
 }
 
-async function isReconnectionAllowed(roomDoc) {
+function isReconnectionExpired(roomDoc) {
   if (!roomDoc.exists()) {
-    return false;
-  }
-  if (roomDoc.data().state === room_states.closed) {
-    return false;
-  }
-  if (roomDoc.data().canReconnectUntil == null) {
     return true;
   }
+  if (roomDoc.data().state === room_states.closed || roomDoc.data().state === room_states.rematch_wait) {
+    return true;
+  }
+  if (roomDoc.data().reconnectExpireAt == null) {
+    return false;
+  }
+  const opponentId = getOpponentIdFromRoomData(roomDoc.data());
 
-  const now = await getPublicServerTime();
-  return roomDoc.data().canReconnectUntil - now <= reconnectDurationMilliSec;
+  // 再接続期限時刻は相手の端末が記録しているため真の経過時間に直す
+  delta = data.enteredAt?.[myUid] - data.enteredAt?.[opponentId];
+  return roomDoc.data().reconnectExpireAt - (Date.now() - delta) <= reconnectDurationMilliSec;
 }
 
 // ユーザー状態監視
@@ -272,19 +274,23 @@ onAuthStateChanged(auth, async (user) => {
         currentRoomId = userDoc.data().currentRoomId;
 
         const roomDoc = await fetchRoomDocById(currentRoomId);
-        if (await isReconnectionAllowed(roomDoc)) {
+        if (isReconnectionExpired(roomDoc)) {
+          console.log(`再接続期限切れのため${currentRoomId}入室不可能`);
+          updateDoc(doc(db, "users", myUid), {
+            currentRoomId: null
+          });
+          currentRoomId = null;
+        } else {
           console.log(`${currentRoomId}へ再接続します`);
+          await updateDoc(doc(db, "rooms", currentRoomId), {
+            [`lastSeen.${myUid}`]: Date.now(),
+            state: room_states.playing,
+            reconnectExpireAt: null
+          });
           heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
           displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
-
-          await updateDoc(doc(db, "rooms", currentRoomId), {
-            state: room_states.playing,
-            canReconnectUntil: null
-          });
           startGameListener(currentRoomId);
           showScreen("screen-game");
-        } else {
-          console.log(`${currentRoomId}へ再接続不可能`);
         }
       }
     } else if (playerName) {
@@ -307,7 +313,7 @@ async function joinQueue() {
   // ① 自分を待機キューに追加
   const docRef = await addDoc(collection(db, "waiting"), {
     uid: myUid,
-    createdAt: await getPublicServerTime()
+    createdAt: Date.now()
   });
   // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
   myWaitingDocId = docRef.id;
@@ -324,7 +330,6 @@ async function joinQueue() {
     const uid2 = users[1].data().uid;
 
     // ④ room作成
-    const currentUnixTime = await getPublicServerTime();
     const roomRef = await addDoc(collection(db, "rooms"), {
       players: [uid1, uid2],
       player1: uid1,
@@ -332,8 +337,12 @@ async function joinQueue() {
       player1Roll: null,
       player2Roll: null,
       lastSeen: {
-        // [uid1]: currentUnixTime,
-        // [uid2]: currentUnixTime
+        [uid1]: null,
+        [uid2]: null
+      },
+      enteredAt: {
+        [uid1]: null,
+        [uid2]: null
       },
       rematch: {},
       rematchDeadline: null,
@@ -409,7 +418,7 @@ function startRoomListener() {
       console.log("マッチ成立:", docSnap.id);
 
       currentRoomId = docSnap.id;
-      await updateDoc(doc(db, "users", myUid), {
+      updateDoc(doc(db, "users", myUid), {
         currentRoomId: currentRoomId
       });
 
@@ -451,9 +460,8 @@ function stopRoomListener() {
   }
 }
 
-async function cannotReconnectAnyLonger(canReconnectUntil) {
-  const now = await getPublicServerTime();
-  return now >= canReconnectUntil;
+function cannotReconnectAnyLonger(reconnectExpireAt) {
+  return Date.now() >= reconnectExpireAt;
 }
 
 function startGameListener(roomId) {
@@ -473,69 +481,68 @@ function startGameListener(roomId) {
     const opponentId = getOpponentIdFromRoomData(data);
     const opponentLastSeen = data.lastSeen?.[opponentId];
     if (document.getElementById("roomId").textContent.length === 0) {
-      document.getElementById("roomId").textContent =
-        `${currentRoomId}`;
+      document.getElementById("roomId").textContent = `${roomId}`;
       const opponentDoc = await fetchUserDocByUid(opponentId);
-      document.getElementById("opponentName").textContent =
-        `${opponentDoc.data().name}`;
+      document.getElementById("opponentName").textContent = `${opponentDoc.data().name}`;
 
       console.log("roomId, opponentNameのUI表示完了（最初の1回のみ実行されるはず）");
     }
     document.getElementById("result").textContent = render(data);
 
     if (data.state === room_states.not_started_yet) {
-      if (data.lastSeen?.[myUid] != null && opponentLastSeen != null) {
+      if (data.enteredAt?.[myUid] != null && data.enteredAt?.[opponentId] != null) {
+        delta = data.enteredAt?.[myUid] - data.enteredAt?.[opponentId];
+
+        if (myUid === data.player1) {
+          await updateDoc(roomRef, {
+            state: room_states.playing
+          });
+        }
+      }
+    } else if (data.state === room_states.playing) {
+      if (isDisconnected(opponentLastSeen)) {
+        // 切断時の扱い
+        document.getElementById("opponentConnectionNotification").textContent = "相手の接続が切れました";
+
+        // 再接続してくる側と競合しないように2倍の値を設定（再接続許可時間は本来の値）
         await updateDoc(roomRef, {
-          state: room_states.playing
+          state: room_states.reconnect_wait,
+          reconnectExpireAt: Date.now() + 2 * reconnectDurationMilliSec
+        });
+      } else {
+        document.getElementById("opponentConnectionNotification").textContent = "";
+      }
+
+      if (myUid === data.player1 && data.player1Roll != null && data.player2Roll != null) {
+        await updateDoc(roomRef, {
+          state: room_states.rematch_wait,
+          rematch: {},
+          rematchDeadline: Date.now() + rematchDeadlineMilliSec
         });
       }
-    }
-
-    if (data.state === room_states.reconnect_wait) {
-      if (await cannotReconnectAnyLonger(data.canReconnectUntil)) {
-        console.log("相手が再接続許可期限切れのため強制解散");
+    } else if (data.state === room_states.reconnect_wait) {
+      console.log(`残り時間 = ${data.reconnectExpireAt - Date.now()} msec`);
+      if (cannotReconnectAnyLonger(data.reconnectExpireAt)) {
+        console.log("切断後の再接続期限切れのため強制解散");
         currentRoomData.player1 = myUid;
         await bye(roomId, currentRoomData);
         return;
       }
-      return;
-    }
-
-    if (await isDisconnected(opponentLastSeen)) {
-      // 切断時の扱い
-      document.getElementById("opponentConnectionNotification").textContent = "相手の接続が切れました";
-
-      if (data.state === room_states.rematch_wait) {
+    } else if (data.state === room_states.rematch_wait) {
+      if (isDisconnected(opponentLastSeen)) {
         console.log("相手が再戦希望選択中に接続を切ったため強制解散");
         currentRoomData.player1 = myUid;
         await bye(roomId, currentRoomData);
         return;
       }
 
-      if (data.state === room_states.playing) {
-        // 再接続してくる側と競合しないように2倍の値を設定（再接続許可時間は本来の値）
-        await updateDoc(roomRef, {
-          state: room_states.reconnect_wait,
-          canReconnectUntil: await getPublicServerTime() + 2 * reconnectDurationMilliSec
-        });
+      let now = Date.now();
+      if (myUid === data.player2) {
+        now -= delta;
       }
-    } else {
-      document.getElementById("opponentConnectionNotification").textContent = "";
-    }
-
-    if (data.state === room_states.playing && myUid === data.player1 && data.player1Roll != null && data.player2Roll != null) {
-      await updateDoc(roomRef, {
-        state: room_states.rematch_wait,
-        rematch: {},
-        rematchDeadline: await getPublicServerTime() + rematchDeadlineMilliSec
-      });
-    }
-
-    // 再戦・解散の処理
-    if (data.state === room_states.rematch_wait) {
-      if (await getPublicServerTime() >= data.rematchDeadline) {
+      if (now >= data.rematchDeadline) {
         // 選択肢が表示されてから一定時間が経過すると強制解散
-        console.log("時間切れのため強制解散");
+        console.log("再戦希望選択時間切れのため強制解散");
         await bye(roomId, data);
         return;
       }
@@ -560,13 +567,16 @@ function startGameListener(roomId) {
           console.log("まだ二人の再戦選択が揃っていません");
         } else if (opponentChoice) {
           // 再戦
-          await updateDoc(roomRef, {
-            player1Roll: null,
-            player2Roll: null,
-            state: room_states.playing,
-            rematch: {},
-            rematchDeadline: null
-          });
+          if (myUid === data.player1) {
+            await updateDoc(roomRef, {
+              player1Roll: null,
+              player2Roll: null,
+              state: room_states.playing,
+              rematch: {},
+              rematchDeadline: null
+            });
+          }
+
           console.log("二人とも再戦を希望しました");
 
           document.getElementById("rematchStatus").textContent =
@@ -582,6 +592,9 @@ function startGameListener(roomId) {
         // 解散
         await bye(roomId, data);
       }
+    } else if (data.state === room_states.closed) {
+      currentRoomData.player1 = "";
+      await bye(roomId, currentRoomData);
     }
   });
 }
