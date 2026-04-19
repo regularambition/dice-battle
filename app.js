@@ -515,6 +515,7 @@ function startGameListener(roomId) {
       }
       if (data.enteredAt?.[myUid] != null && data.enteredAt?.[opponentId] != null) {
         delta = data.enteredAt?.[myUid] - data.enteredAt?.[opponentId];
+        console.log(`updated: delta = ${delta}`);
 
         if (myUid === data.player1) {
           await updateDoc(roomRef, {
