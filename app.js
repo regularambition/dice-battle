@@ -236,6 +236,25 @@ async function fetchUserDocByUid(arg_uid) {
   return await getDoc(doc(db, "users", arg_uid));
 }
 
+async function fetchRoomDocById(arg_roomId) {
+  return await getDoc(doc(db, "rooms", arg_roomId));
+}
+
+async function isReconnectionAllowed(roomDoc) {
+  if (!roomDoc.exists()) {
+    return false;
+  }
+  if (roomDoc.data().state === room_states.closed) {
+    return false;
+  }
+  if (roomDoc.data().canReconnectUntil == null) {
+    return true;
+  }
+
+  const now = await getPublicServerTime();
+  return roomDoc.data().canReconnectUntil - now <= reconnectDurationMilliSec;
+}
+
 // ユーザー状態監視
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -248,10 +267,25 @@ onAuthStateChanged(auth, async (user) => {
       // 既存ユーザー
       playerName = userDoc.data().name;
 
+      // 再接続する時の処理
       if (userDoc.data().currentRoomId) {
         currentRoomId = userDoc.data().currentRoomId;
-        startGameListener(currentRoomId);
-        showScreen("screen-game");
+
+        const roomDoc = await fetchRoomDocById(currentRoomId);
+        if (isReconnectionAllowed(roomDoc)) {
+          console.log(`${currentRoomId}へ再接続します`);
+          heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
+          displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
+
+          await updateDoc(doc(db, "rooms", currentRoomId), {
+            state: room_states.playing,
+            canReconnectUntil: null
+          });
+          startGameListener(currentRoomId);
+          showScreen("screen-game");
+        } else {
+          console.log(`${currentRoomId}へ再接続不可能`);
+        }
       }
     } else if (playerName) {
       // 新規登録直後
@@ -298,12 +332,12 @@ async function joinQueue() {
       player1Roll: null,
       player2Roll: null,
       lastSeen: {
-        [uid1]: currentUnixTime,
-        [uid2]: currentUnixTime
+        // [uid1]: currentUnixTime,
+        // [uid2]: currentUnixTime
       },
       rematch: {},
       rematchDeadline: null,
-      state: room_states.playing
+      state: room_states.not_started_yet
     });
 
     // ⑤ waiting削除
@@ -359,7 +393,7 @@ function startRoomListener() {
   const roomQuery = query(
     collection(db, "rooms"),
     where("players", "array-contains", myUid),
-    where("state", "==", room_states.playing)
+    where("state", "==", room_states.not_started_yet)
   );
 
   unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
@@ -389,13 +423,13 @@ function startRoomListener() {
         myWaitingDocId = null;
       }
 
+      heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
+      displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
+
       document.getElementById("randomMatchWaitingNotification").textContent =
         `相手が見つかりました。3秒後に対戦が始まります`;
       await sleep(3000);
       document.getElementById("randomMatchWaitingNotification").textContent = ``;
-
-      heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
-      displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
 
       // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
       startGameListener(currentRoomId);
@@ -428,7 +462,6 @@ function startGameListener(roomId) {
   }
   console.log("gameListener起動成功");
   const roomRef = doc(db, "rooms", roomId);
-  console.log(roomRef);
 
   unsubscribeGameListener = onSnapshot(roomRef, async (docSnap) => {
     console.log("gameListenerが呼ばれました");
@@ -449,6 +482,14 @@ function startGameListener(roomId) {
       console.log("roomId, opponentNameのUI表示完了（最初の1回のみ実行されるはず）");
     }
     document.getElementById("result").textContent = render(data);
+
+    if (data.state === room_states.not_started_yet) {
+      if (data.lastSeen?.[myUid] != null && opponentLastSeen != null) {
+        await updateDoc(roomRef, {
+          state: room_states.playing
+        });
+      }
+    }
 
     if (data.state === room_states.reconnect_wait) {
       if (await cannotReconnectAnyLonger(data.canReconnectUntil)) {
@@ -472,9 +513,10 @@ function startGameListener(roomId) {
       }
 
       if (data.state === room_states.playing) {
+        // 再接続してくる側と競合しないように2倍の値を設定（再接続許可時間は本来の値）
         await updateDoc(roomRef, {
           state: room_states.reconnect_wait,
-          canReconnectUntil: await getPublicServerTime() + reconnectDurationMilliSec
+          canReconnectUntil: await getPublicServerTime() + 2 * reconnectDurationMilliSec
         });
       }
     } else {
