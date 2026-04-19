@@ -176,7 +176,7 @@ function render(data) {
 
 // ボタン操作
 document.getElementById("rollBtn").onclick = async () => {
-  if (!currentRoomId || !currentRoomData) {
+  if (!currentRoomId || !currentRoomData || currentRoomData.state != room_states.playing) {
     alert("部屋が初期化されていません");
     return;
   }
@@ -490,6 +490,11 @@ function startGameListener(roomId) {
     document.getElementById("result").textContent = render(data);
 
     if (data.state === room_states.not_started_yet) {
+      if (data.enteredAt?.[myUid] == null) {
+        await updateDoc(roomRef, {
+          [`enteredAt.${myUid}`]: Date.now()
+        });
+      }
       if (data.enteredAt?.[myUid] != null && data.enteredAt?.[opponentId] != null) {
         delta = data.enteredAt?.[myUid] - data.enteredAt?.[opponentId];
 
