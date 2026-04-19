@@ -272,7 +272,7 @@ onAuthStateChanged(auth, async (user) => {
         currentRoomId = userDoc.data().currentRoomId;
 
         const roomDoc = await fetchRoomDocById(currentRoomId);
-        if (isReconnectionAllowed(roomDoc)) {
+        if (await isReconnectionAllowed(roomDoc)) {
           console.log(`${currentRoomId}へ再接続します`);
           heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
           displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
