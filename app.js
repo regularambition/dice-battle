@@ -78,6 +78,9 @@ function displayRematchUi() {
   }
 
   const now = Date.now();
+  if (myUid === currentRoomData.player2) {
+    now -= delta;
+  }
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
   document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
 }
