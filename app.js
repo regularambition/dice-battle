@@ -77,7 +77,7 @@ function displayRematchUi() {
     return;
   }
 
-  const now = Date.now();
+  let now = Date.now();
   if (myUid === currentRoomData.player2) {
     now -= delta;
   }
