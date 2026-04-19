@@ -48,8 +48,10 @@ function quitIntervalRepeating(id) {
   }
 }
 
-// 部屋に入っている状態であれば一定の時間間隔で
-// 通信中であることをFirestoreに通知する
+/**
+ * 部屋に入っている状態であれば一定の時間間隔で
+ * 通信中であることをFirestoreに通知する
+ */
 async function heartBeat() {
   if (!currentRoomId) {
     return;
@@ -62,10 +64,12 @@ async function heartBeat() {
   });
 }
 
-// 一定時間以上更新なしの場合に切断したと判定する
-function isDisconnected(lastSeen) {
+/**
+ * 相手が一定時間以上更新なしの場合に切断したと判定する
+ */
+function isDisconnected(opponentLastSeen) {
   const now = Date.now() - delta;
-  return now - lastSeen >= disconnectionIntervalMilliSec;
+  return now - opponentLastSeen >= disconnectionIntervalMilliSec;
 }
 
 function displayRematchUi() {
@@ -128,6 +132,10 @@ document.getElementById("nameSubmit").onclick = async () => {
   const max_valid_length = 12;
   if (name.length > max_valid_length) {
     alert(`${max_valid_length}文字以内で入力してください`);
+    return;
+  }
+
+  if (!confirm(`名前を${name}として登録してよろしいですか？`)) {
     return;
   }
 
@@ -277,10 +285,23 @@ onAuthStateChanged(auth, async (user) => {
           updateDoc(doc(db, "users", myUid), {
             currentRoomId: null
           });
+
+          if (roomDoc.exists() && roomDoc.data().state === room_states.rematch_wait) {
+            console.log(`部屋の状態が${room_states.rematch_wait}であるため要削除か確認`);
+            await sleep(disconnectionIntervalMilliSec);
+
+            const rdc = await fetchRoomDocById(currentRoomId);
+            if (rdc.exists() && rdc.data().state === room_states.rematch_wait) {
+              console.log(`部屋削除を実行`);
+              await updateDoc(rdc, {
+                state: room_states.closed
+              });
+            }
+          }
           currentRoomId = null;
         } else {
           console.log(`${currentRoomId}へ再接続します`);
-          await updateDoc(doc(db, "rooms", currentRoomId), {
+          await updateDoc(roomDoc, {
             [`lastSeen.${myUid}`]: Date.now(),
             state: room_states.playing,
             reconnectExpireAt: null
