@@ -57,7 +57,7 @@ async function heartBeat() {
     return;
   }
 
-  const roomRef = doc(db, "rooms", currentRoomId);
+  const roomRef = getRoomRef(currentRoomId);
 
   updateDoc(roomRef, {
     [`lastSeen.${myUid}`]: Date.now()
@@ -192,7 +192,7 @@ document.getElementById("rollBtn").onclick = async () => {
 
   const roll = Math.floor(Math.random() * 6) + 1;
 
-  const roomRef = doc(db, "rooms", currentRoomId);
+  const roomRef = getRoomRef(currentRoomId);
 
   if (myUid === currentRoomData.player1) {
     if (currentRoomData.player1Roll == null) {
@@ -222,7 +222,7 @@ document.getElementById("rematchBtn").onclick = async () => {
   }
   isRematchChoiceFixed = true;
 
-  const roomRef = doc(db, "rooms", currentRoomId);
+  const roomRef = getRoomRef(currentRoomId);
   updateDoc(roomRef, {
     [`rematch.${myUid}`]: true
   });
@@ -235,7 +235,7 @@ document.getElementById("leaveBtn").onclick = async () => {
   }
   isRematchChoiceFixed = true;
 
-  const roomRef = doc(db, "rooms", currentRoomId);
+  const roomRef = getRoomRef(currentRoomId);
   updateDoc(roomRef, {
     [`rematch.${myUid}`]: false
   });
@@ -245,8 +245,8 @@ async function fetchUserDocByUid(arg_uid) {
   return await getDoc(doc(db, "users", arg_uid));
 }
 
-async function fetchRoomDocById(arg_roomId) {
-  return await getDoc(doc(db, "rooms", arg_roomId));
+function getRoomRef(roomId) {
+  return doc(db, "rooms", roomId);
 }
 
 function isReconnectionExpired(roomDoc) {
@@ -282,7 +282,8 @@ onAuthStateChanged(auth, async (user) => {
       if (userDoc.data().currentRoomId) {
         currentRoomId = userDoc.data().currentRoomId;
 
-        const roomDoc = await fetchRoomDocById(currentRoomId);
+        const roomRef = getRoomRef(currentRoomId);
+        const roomDoc = await getDoc(roomRef);
         if (isReconnectionExpired(roomDoc)) {
           console.log(`再接続期限切れのため${currentRoomId}入室不可能`);
           updateDoc(doc(db, "users", myUid), {
@@ -293,10 +294,10 @@ onAuthStateChanged(auth, async (user) => {
             console.log(`部屋の状態が${room_states.rematch_wait}であるため要削除か確認`);
             await sleep(disconnectionIntervalMilliSec);
 
-            const rdc = await fetchRoomDocById(currentRoomId);
+            const rdc = await getDoc(roomRef);
             if (rdc.exists() && rdc.data().state === room_states.rematch_wait) {
               console.log(`部屋削除を実行`);
-              await updateDoc(rdc, {
+              await updateDoc(roomRef, {
                 state: room_states.closed
               });
             }
@@ -304,7 +305,7 @@ onAuthStateChanged(auth, async (user) => {
           currentRoomId = null;
         } else {
           console.log(`${currentRoomId}へ再接続します`);
-          await updateDoc(roomDoc, {
+          await updateDoc(roomRef, {
             [`lastSeen.${myUid}`]: Date.now(),
             state: room_states.playing,
             reconnectExpireAt: null
@@ -655,7 +656,8 @@ async function stopGameListener(roomId, isRoomRemover) {
     unsubscribeGameListener = null;
 
     if (isRoomRemover) {
-      await updateDoc(doc(db, "rooms", roomId), {
+      const roomRef = getRoomRef(roomId);
+      await updateDoc(roomRef, {
         state: room_states.closed
       });
       console.log(`部屋${roomId}の削除成功`);
