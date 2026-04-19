@@ -54,7 +54,6 @@ async function heartBeat() {
   if (!currentRoomId) {
     return;
   }
-  console.log("heartBeatが呼ばれました");
 
   const roomRef = doc(db, "rooms", currentRoomId);
 
@@ -73,7 +72,6 @@ function displayRematchUi() {
   if (!currentRoomData || !currentRoomData?.rematchDeadline) {
     return;
   }
-  console.log("displayRematchUiが呼ばれました");
 
   const now = Date.now();
   const remaining = Math.max(0, currentRoomData.rematchDeadline - now);
@@ -407,8 +405,6 @@ function startRoomListener() {
 
   unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach(async (docSnap) => {
-      console.log("roomListenerが呼ばれました");
-
       // ★ すでに入っているなら無視（重複防止）
       if (currentRoomId) {
         console.log("既に入室済みのためroomListenerが即座に終了しました");
@@ -472,8 +468,6 @@ function startGameListener(roomId) {
   const roomRef = doc(db, "rooms", roomId);
 
   unsubscribeGameListener = onSnapshot(roomRef, async (docSnap) => {
-    console.log("gameListenerが呼ばれました");
-
     const data = docSnap.data();
     currentRoomData = data;
 
