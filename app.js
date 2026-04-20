@@ -43,6 +43,10 @@ const rematchDurationMilliSec = 20000;
 const rematchRemainingTimeIntervalMilliSec = 1000;
 const reconnectDurationMilliSec = 15000;
 
+function cannotCallToMillis(arg) {
+  return !arg || !arg.toMillis;
+}
+
 /**
  * 入室時あるいは再接続時に呼び出してサーバー・ローカル間の時刻オフセットを取得
  */
@@ -61,7 +65,7 @@ async function syncServerTime() {
       const data = snap.data();
       const ts = data?.serverTime;
 
-      if (!ts || !ts.toMillis) {
+      if (cannotCallToMillis(ts)) {
         return;
       }
 
@@ -117,7 +121,7 @@ async function heartBeat() {
  * 相手が一定時間以上更新なしの場合に切断したと判定する
  */
 function isDisconnected(opponentLastSeen) {
-  if (!opponentLastSeen || !opponentLastSeen.toMillis) {
+  if (cannotCallToMillis(opponentLastSeen)) {
     return false;
   }
 
@@ -126,7 +130,7 @@ function isDisconnected(opponentLastSeen) {
 }
 
 function displayRematchUi() {
-  if (!currentRoomData || !currentRoomData?.gameEndedAt || !currentRoomData?.gameEndedAt.toMillis) {
+  if (!currentRoomData || cannotCallToMillis(currentRoomData?.gameEndedAt)) {
     return;
   }
 
@@ -298,6 +302,9 @@ function getRoomRef(roomId) {
   return doc(db, "rooms", roomId);
 }
 
+/**
+ * 時間が経過して再接続できなくなっている場合にtrueを返す
+ */
 function isReconnectionExpired(roomDoc) {
   if (!roomDoc.exists()) {
     return true;
@@ -305,7 +312,7 @@ function isReconnectionExpired(roomDoc) {
   if (roomDoc.data().state === room_states.closed || roomDoc.data().state === room_states.rematch_wait) {
     return true;
   }
-  if (!roomDoc.data().disconnectDetectedAt || roomDoc.data().disconnectDetectedAt.toMillis) {
+  if (cannotCallToMillis(roomDoc.data().disconnectDetectedAt)) {
     return false;
   }
   return getNow() - roomDoc.data().disconnectDetectedAt.toMillis() >= reconnectDurationMilliSec;
@@ -527,7 +534,7 @@ function stopRoomListener() {
  * 相手の切断から一定時間が経過して再接続受付をやめなければならない場合にtrueを返す
  */
 function mustEndReconnectionGracePeriod(disconnectDetectedAt) {
-  if (!disconnectDetectedAt || !disconnectDetectedAt.toMillis) {
+  if (cannotCallToMillis(disconnectDetectedAt)) {
     return false;
   }
   const ddat = disconnectDetectedAt.toMillis();
@@ -538,7 +545,7 @@ function mustEndReconnectionGracePeriod(disconnectDetectedAt) {
  * 再戦希望選択の提示から一定時間が経過して再戦受付をやめなければならない場合にtrueを返す
  */
 function mustEndRematchGracePeriod(gameEndedAt) {
-  if (!gameEndedAt || !gameEndedAt.toMillis) {
+  if (cannotCallToMillis(gameEndedAt)) {
     return false;
   }
   const geat = gameEndedAt.toMillis();
@@ -599,7 +606,7 @@ function startGameListener(roomId) {
         });
       }
     } else if (data.state === room_states.reconnect_wait) {
-      if (data.disconnectDetectedAt && data.disconnectDetectedAt.toMillis) {
+      if (!cannotCallToMillis(data.disconnectDetectedAt)) {
         console.log(`残り時間 = ${data.disconnectDetectedAt.toMillis() + 2 * reconnectDurationMilliSec - getNow()} msec`);
       }
       if (mustEndReconnectionGracePeriod(data.disconnectDetectedAt)) {
