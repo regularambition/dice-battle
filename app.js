@@ -91,7 +91,6 @@ async function syncServerTime() {
  */
 function getNow() {
   const res = Date.now() + timeOffset;
-  console.log(`result of getNow() = ${res}`);
   return res;
 }
 
