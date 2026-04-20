@@ -329,6 +329,7 @@ onAuthStateChanged(auth, async (user) => {
 
         const roomRef = getRoomRef(currentRoomId);
         const roomDoc = await getDoc(roomRef);
+        await syncServerTime();
         if (isReconnectionExpired(roomDoc)) {
           console.log(`再接続期限切れのため${currentRoomId}入室不可能`);
           updateDoc(doc(db, "users", myUid), {
