@@ -354,6 +354,9 @@ onAuthStateChanged(auth, async (user) => {
             state: room_states.playing,
             disconnectDetectedAt: null
           });
+
+          heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
+          displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
           startGameListener(currentRoomId);
           showScreen("screen-game");
         }
@@ -466,6 +469,9 @@ function startRoomListener() {
     where("players", "array-contains", myUid),
     where("state", "==", room_states.not_started_yet)
   );
+
+  heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
+  displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
 
   unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach(async (docSnap) => {
@@ -663,9 +669,6 @@ function startGameListener(roomId) {
       await bye(roomId, currentRoomData);
     }
   });
-
-  heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
-  displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
 }
 
 // 解散処理
