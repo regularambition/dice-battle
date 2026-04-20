@@ -1,6 +1,7 @@
 // Firebase読み込み
 import { db, auth } from "./firebase.js";
 import { room_states } from "./room_state_enum.js";
+import { room_modes } from "./room_mode_enum.js";
 import {
   doc,
   updateDoc,
@@ -14,7 +15,8 @@ import {
   query,
   orderBy,
   deleteDoc,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   signInAnonymously,
@@ -33,9 +35,12 @@ let isRematchChoiceFixed = true;
 let heartBeatId = null;
 let displayRematchUiId = null;
 let timeOffset = 0;
+let myPrivateRoomId = null;
 
 // timeはミリ秒
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
+
+const regex = /^[A-Za-z0-9]+$/;
 
 const heartBeatIntervalMilliSec = 3000;
 const disconnectionIntervalMilliSec = 10000;
@@ -138,7 +143,10 @@ function displayRematchUi() {
 }
 
 function showScreen(screenId) {
-  const screens = ["screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game"];
+  const screens = [
+    "screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game",
+    "screen-private-match-choice", "screen-private-match-host", "screen-private-match-guest"
+  ];
 
   screens.forEach(id => {
     document.getElementById(id).style.display = "none";
@@ -179,7 +187,6 @@ document.getElementById("nameSubmit").onclick = async () => {
     return;
   }
 
-  const regex = /^[A-Za-z0-9]+$/;
   if (!regex.test(name)) {
     alert("大文字・小文字・アラビア数字のみが利用できます");
     return;
@@ -435,7 +442,7 @@ async function leaveQueue() {
 
 document.getElementById("randomBtn").onclick = async () => {
   showScreen("screen-random-match-waiting");
-  startRoomListener();
+  startRoomListener("randomMatchWaitingNotification");
   await joinQueue();
 };
 
@@ -464,7 +471,7 @@ function getOpponentIdFromRoomData(roomData) {
   }
 }
 
-function startRoomListener() {
+function startRoomListener(notificationComponentId) {
   if (unsubscribeRoomListener) {
     return;
   }
@@ -504,10 +511,10 @@ function startRoomListener() {
       const roomRef = getRoomRef(currentRoomId);
       await syncServerTime();
 
-      document.getElementById("randomMatchWaitingNotification").textContent =
+      document.getElementById(notificationComponentId).textContent =
         `相手が見つかりました。3秒後に対戦が始まります`;
       await sleep(3000);
-      document.getElementById("randomMatchWaitingNotification").textContent = ``;
+      document.getElementById(notificationComponentId).textContent = ``;
 
       // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
       startGameListener(currentRoomId);
@@ -525,6 +532,7 @@ function stopRoomListener() {
   if (unsubscribeRoomListener) {
     unsubscribeRoomListener();
     unsubscribeRoomListener = null;
+    myPrivateRoomId = null;
     console.log("roomListener停止成功");
   }
 }
@@ -718,3 +726,165 @@ async function stopGameListener(roomId, isRoomRemover) {
     console.log("gameListener停止成功");
   }
 }
+
+/**
+ * プライベートマッチ部屋を建てる
+ */
+async function createPrivateRoom() {
+  const roomRef = await addDoc(collection(db, "rooms"), {
+    mode: room_modes.private,
+    players: [myUid],
+    player1: myUid,
+    player2: null,
+    player1Roll: null,
+    player2Roll: null,
+    lastSeen: {},
+    rematch: {},
+    gameEndedAt: null,
+    disconnectDetectedAt: null,
+    state: room_states.not_started_yet,
+    createdAt: serverTimestamp()
+  });
+
+  myPrivateRoomId = roomRef.id;
+  startRoomListener("privateMatchHostWaitingNotification");
+}
+
+/**
+ * 建てたプライベートマッチ部屋への入室受付をやめる
+ */
+async function quitWaitingForEntrace() {
+  if (!myPrivateRoomId) {
+    alert(`プライベートマッチ部屋を建てていません`);
+    return;
+  }
+  if (currentRoomId) {
+    alert(`既に入室が確定しています`);
+    return;
+  }
+
+  const roomRef = getRoomRef(myPrivateRoomId);
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const roomSnap = await transaction.get(roomRef);
+
+      if (roomSnap.exists()) {
+        const data = roomSnap.data();
+        transaction.update(roomRef, {
+          state: room_states.closed
+        });
+      } else {
+        console.log(`部屋${myPrivateRoomId}が消失済み`);
+      }
+    });
+
+    console.log("入室受付を停止しました");
+    stopRoomListener();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+/**
+ * ホストの建てたプライベートマッチ部屋のIDを入力して入る
+ */
+async function joinByRoomId(roomId) {
+  const roomRef = getRoomRef(roomId);
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const roomSnap = await transaction.get(roomRef);
+
+      if (!roomSnap.exists()) {
+        throw new Error("部屋が存在しません");
+      }
+
+      const data = roomSnap.data();
+
+      // 🔴 既に2人いる
+      if (data.player2) {
+        throw new Error("満員です");
+      }
+
+      // 🔴 自分が既に入っている
+      if (data.player1 === uid || data.player2 === uid) {
+        console.log("既に入室済み");
+        return;
+      }
+
+      if (data.state !== room_states.not_started_yet) {
+        throw new Error("既に開始済み");
+      }
+
+      if (data.mode !== room_modes.private) {
+        throw new Error("不正な部屋");
+      }
+
+      // 🟢 ここで初めて参加確定
+      transaction.update(roomRef, {
+        player2: myUid,
+        players: [data.player1, myUid],
+        state: room_states.playing
+      });
+    });
+
+    console.log("入室成功");
+    startRoomListener("privateMatchGuestWaitingNotification");
+
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+document.getElementById("privateBtn").onclick = () => {
+  showScreen("screen-private-match-choice");
+};
+
+document.getElementById("privateHostBtn").onclick = async () => {
+  await createPrivateRoom();
+  document.getElementById("privateMatchHostWaitingNotification").textContent = "";
+  showScreen("screen-private-match-host");
+};
+
+document.getElementById("myPrivateRoomIdCopyBtn").onclick = async () => {
+  if (!navigator.clipboard) {
+    alert("このブラウザはコピー機能に対応していません");
+  }
+
+  const input = document.getElementById("myPrivateRoomId").textContent;
+  const notification = document.getElementById("privateMatchHostWaitingNotification");
+  try {
+    await navigator.clipboard.writeText(input);
+    notification.textContent = "コピーしました！";
+  } catch (err) {
+    console.error(err);
+    notification.textContent = "コピーに失敗しました";
+  }
+};
+
+document.getElementById("privateHostCancelBtn").onclick = async () => {
+  await quitWaitingForEntrace();
+  showScreen("screen-private-match-choice");
+};
+
+document.getElementById("privateGuestBtn").onclick = async () => {
+  showScreen("screen-private-match-guest");
+};
+
+document.getElementById("privateRoomIdInputConfirmBtn").onclick = async () => {
+  const roomId = document.getElementById("privateRoomIdInput").value;
+  if (!regex.test(roomId)) {
+    alert("大文字・小文字・アラビア数字のみが利用できます");
+    return;
+  }
+  await joinByRoomId(roomId);
+};
+
+document.getElementById("privateGuestCancelBtn").onclick = async () => {
+  showScreen("screen-private-match-choice");
+};
+
+document.getElementById("privateCancelBtn").onclick = async () => {
+  showScreen("screen-menu");
+};
