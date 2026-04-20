@@ -130,7 +130,7 @@ function displayRematchUi() {
     return;
   }
 
-  const remaining = Math.max(0, currentRoomData.gameEndedAt + rematchDurationMilliSec - getNow());
+  const remaining = Math.max(0, currentRoomData.gameEndedAt.toMillis() + rematchDurationMilliSec - getNow());
   document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
 }
 
