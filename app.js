@@ -46,19 +46,20 @@ const reconnectDurationMilliSec = 15000;
 /**
  * 入室時あるいは再接続時に呼び出してサーバー・ローカル間の時刻オフセットを取得
  */
-async function syncServerTime(roomRef) {
+async function syncServerTime() {
+  const dummyRef = doc(db, "current_dummy", "2pHQMjO9Q6NSL8wfogoR");
   const before = Date.now();
 
   // ① サーバー時刻を書き込む
-  await updateDoc(roomRef, {
+  await updateDoc(dummyRef, {
     serverTime: serverTimestamp()
   });
 
   // ② 1回だけ待つリスナー
   return new Promise((resolve) => {
-    const unsubscribe = onSnapshot(roomRef, (snap) => {
+    const unsubscribe = onSnapshot(dummyRef, (snap) => {
       const data = snap.data();
-      const ts = data?.timeSync?.serverTime;
+      const ts = data?.serverTime;
 
       if (!ts || !ts.toMillis) {
         return;
@@ -355,8 +356,6 @@ onAuthStateChanged(auth, async (user) => {
             disconnectDetectedAt: null
           });
 
-          heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
-          displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
           startGameListener(currentRoomId);
           showScreen("screen-game");
         }
@@ -470,9 +469,6 @@ function startRoomListener() {
     where("state", "==", room_states.not_started_yet)
   );
 
-  heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
-  displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
-
   unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach(async (docSnap) => {
       // ★ すでに入っているなら無視（重複防止）
@@ -499,7 +495,7 @@ function startRoomListener() {
       }
 
       const roomRef = getRoomRef(currentRoomId);
-      await syncServerTime(roomRef);
+      await syncServerTime();
 
       document.getElementById("randomMatchWaitingNotification").textContent =
         `相手が見つかりました。3秒後に対戦が始まります`;
@@ -669,6 +665,9 @@ function startGameListener(roomId) {
       await bye(roomId, currentRoomData);
     }
   });
+
+  heartBeatId = setInterval(heartBeat, heartBeatIntervalMilliSec);
+  displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
 }
 
 // 解散処理
