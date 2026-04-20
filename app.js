@@ -838,6 +838,7 @@ async function joinByRoomId(roomId) {
 }
 
 document.getElementById("privateBtn").onclick = () => {
+  console.log("privateBtnが押されました");
   showScreen("screen-private-match-choice");
 };
 
