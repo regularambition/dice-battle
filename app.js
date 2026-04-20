@@ -48,9 +48,13 @@ const rematchDurationMilliSec = 20000;
 const rematchRemainingTimeIntervalMilliSec = 1000;
 const reconnectDurationMilliSec = 15000;
 
+console.log("reconnectDurationMilliSec直後到達");
+
 function cannotCallToMillis(arg) {
   return !arg || !arg.toMillis;
 }
+
+console.log("cannotCallToMillis直後到達");
 
 /**
  * 入室時あるいは再接続時に呼び出してサーバー・ローカル間の時刻オフセットを取得
@@ -91,6 +95,8 @@ async function syncServerTime() {
   });
 }
 
+console.log("syncServerTime直後到達");
+
 /**
  * 予め求めておいた時刻オフセットを用いて擬似的なサーバー時刻を取得する
  */
@@ -99,11 +105,15 @@ function getNow() {
   return res;
 }
 
+console.log("getNow直後到達");
+
 function quitIntervalRepeating(id) {
   if (id != null) {
     clearInterval(id);
   }
 }
+
+console.log("quitIntervalRepeating直後到達");
 
 /**
  * 部屋に入っている状態であれば一定の時間間隔で
@@ -121,6 +131,8 @@ async function heartBeat() {
   });
 }
 
+console.log("heartBeat直後到達");
+
 /**
  * 相手が一定時間以上更新なしの場合に切断したと判定する
  */
@@ -133,6 +145,8 @@ function isDisconnected(opponentLastSeen) {
   return getNow() - olsMsec >= disconnectionIntervalMilliSec;
 }
 
+console.log("isDisconnected直後到達");
+
 function displayRematchUi() {
   if (!currentRoomData || cannotCallToMillis(currentRoomData?.gameEndedAt)) {
     return;
@@ -141,6 +155,8 @@ function displayRematchUi() {
   const remaining = Math.max(0, currentRoomData.gameEndedAt.toMillis() + rematchDurationMilliSec - getNow());
   document.getElementById("rematchRemainingTime").textContent = `${Math.ceil(remaining / rematchRemainingTimeIntervalMilliSec)}`;
 }
+
+console.log("displayRematchUi直後到達");
 
 function showScreen(screenId) {
   const screens = [
@@ -155,9 +171,13 @@ function showScreen(screenId) {
   document.getElementById(screenId).style.display = "block";
 }
 
+console.log("showScreen直後到達");
+
 window.onload = () => {
   showScreen("screen-title");
 };
+
+console.log("window.onload直後到達");
 
 document.getElementById("startBtn").onclick = () => {
   if (!isAuthChecked) {
@@ -173,6 +193,8 @@ document.getElementById("startBtn").onclick = () => {
     showScreen("screen-name");
   }
 };
+
+console.log("startBtn直後到達");
 
 document.getElementById("nameSubmit").onclick = async () => {
   if (myUid) {
@@ -212,6 +234,8 @@ document.getElementById("nameSubmit").onclick = async () => {
   showScreen("screen-menu");
 };
 
+console.log("nameSubmit直後到達");
+
 function get_result_msg(myRoll, opponentRoll) {
   if (myRoll > opponentRoll) {
     return "YOU WIN!!!";
@@ -221,6 +245,8 @@ function get_result_msg(myRoll, opponentRoll) {
     return "draw";
   }
 }
+
+console.log("get_result_msg直後到達");
 
 function render(data) {
   const myRoll = (data.player1 === myUid) ? data.player1Roll : data.player2Roll;
@@ -241,6 +267,8 @@ function render(data) {
     return `you: ${myRoll ?? "waiting"}, ${opponentName}: ${opponentRoll ?? "waiting"}`;
   }
 }
+
+console.log("render直後到達");
 
 // ボタン操作
 document.getElementById("rollBtn").onclick = async () => {
@@ -274,6 +302,8 @@ document.getElementById("rollBtn").onclick = async () => {
   }
 };
 
+console.log("rollBtn直後到達");
+
 document.getElementById("rematchBtn").onclick = async () => {
   if (isRematchChoiceFixed) {
     console.log(`既に選択済みまたは再戦・解散が決定済みです`);
@@ -286,6 +316,8 @@ document.getElementById("rematchBtn").onclick = async () => {
     [`rematch.${myUid}`]: true
   });
 };
+
+console.log("rematchBtn直後到達");
 
 document.getElementById("leaveBtn").onclick = async () => {
   if (isRematchChoiceFixed) {
@@ -300,13 +332,19 @@ document.getElementById("leaveBtn").onclick = async () => {
   });
 };
 
+console.log("leaveBtn直後到達");
+
 async function fetchUserDocByUid(arg_uid) {
   return await getDoc(doc(db, "users", arg_uid));
 }
 
+console.log("fetchUserDocByUid直後到達");
+
 function getRoomRef(roomId) {
   return doc(db, "rooms", roomId);
 }
+
+console.log("getRoomRef直後到達");
 
 /**
  * 時間が経過して再接続できなくなっている場合にtrueを返す
@@ -323,6 +361,8 @@ function isReconnectionExpired(roomDoc) {
   }
   return getNow() - roomDoc.data().disconnectDetectedAt.toMillis() >= reconnectDurationMilliSec;
 }
+
+console.log("isReconnectionExpired直後到達");
 
 // ユーザー状態監視
 onAuthStateChanged(auth, async (user) => {
@@ -390,6 +430,8 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+console.log("onAuthStateChanged直後到達");
+
 async function joinQueue() {
   // ① 自分を待機キューに追加
   const docRef = await addDoc(collection(db, "waiting"), {
@@ -436,15 +478,21 @@ async function joinQueue() {
   }
 }
 
+console.log("joinQueue直後到達");
+
 async function leaveQueue() {
   await deleteDoc(doc(db, "waiting", myWaitingDocId));
 }
+
+console.log("leaveQueue直後到達");
 
 document.getElementById("randomBtn").onclick = async () => {
   showScreen("screen-random-match-waiting");
   startRoomListener("randomMatchWaitingNotification");
   await joinQueue();
 };
+
+console.log("randomBtn直後到達");
 
 document.getElementById("randomMatchCancelBtn").onclick = async () => {
   if (!myWaitingDocId) {
@@ -463,6 +511,8 @@ document.getElementById("randomMatchCancelBtn").onclick = async () => {
   showScreen("screen-menu");
 };
 
+console.log("randomMatchCancelBtn直後到達");
+
 function getOpponentIdFromRoomData(roomData) {
   if (roomData.player1 === myUid) {
     return roomData.player2;
@@ -470,6 +520,8 @@ function getOpponentIdFromRoomData(roomData) {
     return roomData.player1;
   }
 }
+
+console.log("getOpponentIdFromRoomData直後到達");
 
 function startRoomListener(notificationComponentId) {
   if (unsubscribeRoomListener) {
@@ -528,6 +580,8 @@ function startRoomListener(notificationComponentId) {
   });
 }
 
+console.log("startRoomListener直後到達");
+
 function stopRoomListener() {
   if (unsubscribeRoomListener) {
     unsubscribeRoomListener();
@@ -536,6 +590,8 @@ function stopRoomListener() {
     console.log("roomListener停止成功");
   }
 }
+
+console.log("stopRoomListener直後到達");
 
 /**
  * 相手の切断から一定時間が経過して再接続受付をやめなければならない場合にtrueを返す
@@ -548,6 +604,8 @@ function mustEndReconnectionGracePeriod(disconnectDetectedAt) {
   return getNow() - ddat >= 2 * reconnectDurationMilliSec;
 }
 
+console.log("mustEndReconnectionGracePeriod直後到達");
+
 /**
  * 再戦希望選択の提示から一定時間が経過して再戦受付をやめなければならない場合にtrueを返す
  */
@@ -558,6 +616,8 @@ function mustEndRematchGracePeriod(gameEndedAt) {
   const geat = gameEndedAt.toMillis();
   return getNow() - geat >= rematchDurationMilliSec;
 }
+
+console.log("mustEndRematchGracePeriod直後到達");
 
 function startGameListener(roomId) {
   if (unsubscribeGameListener) {
@@ -685,6 +745,8 @@ function startGameListener(roomId) {
   displayRematchUiId = setInterval(displayRematchUi, rematchRemainingTimeIntervalMilliSec);
 }
 
+console.log("startGameListener直後到達");
+
 // 解散処理
 async function bye(roomId, roomData) {
   isRematchChoiceFixed = true;
@@ -711,6 +773,8 @@ async function bye(roomId, roomData) {
   showScreen("screen-menu");
 }
 
+console.log("bye直後到達");
+
 async function stopGameListener(roomId, isRoomRemover) {
   if (unsubscribeGameListener) {
     unsubscribeGameListener();
@@ -726,6 +790,8 @@ async function stopGameListener(roomId, isRoomRemover) {
     console.log("gameListener停止成功");
   }
 }
+
+console.log("stopGameListener直後到達");
 
 /**
  * プライベートマッチ部屋を建てる
