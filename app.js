@@ -742,8 +742,7 @@ async function createPrivateRoom() {
     rematch: {},
     gameEndedAt: null,
     disconnectDetectedAt: null,
-    state: room_states.not_started_yet,
-    createdAt: serverTimestamp()
+    state: room_states.not_started_yet
   });
 
   myPrivateRoomId = roomRef.id;
