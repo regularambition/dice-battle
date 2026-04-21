@@ -749,8 +749,6 @@ async function createPrivateRoom() {
   startRoomListener("privateMatchHostWaitingNotification");
 }
 
-console.log("createPrivateRoom直後到達");
-
 /**
  * 建てたプライベートマッチ部屋への入室受付をやめる
  */
@@ -786,8 +784,6 @@ async function quitWaitingForEntrace() {
     alert(e.message);
   }
 }
-
-console.log("quitWaitingForEntrace直後到達");
 
 /**
  * ホストの建てたプライベートマッチ部屋のIDを入力して入る
@@ -837,22 +833,15 @@ async function joinByRoomId(roomId) {
   }
 }
 
-console.log("joinByRoomId直後到達");
-
 document.getElementById("privateBtn").onclick = () => {
-  console.log("privateBtnが押されました");
   showScreen("screen-private-match-choice");
 };
-
-console.log("privateBtn直後到達");
 
 document.getElementById("privateHostBtn").onclick = async () => {
   await createPrivateRoom();
   document.getElementById("privateMatchHostWaitingNotification").textContent = "";
   showScreen("screen-private-match-host");
 };
-
-console.log("privateHostBtn直後到達");
 
 document.getElementById("myPrivateRoomIdCopyBtn").onclick = async () => {
   if (!navigator.clipboard) {
@@ -870,20 +859,14 @@ document.getElementById("myPrivateRoomIdCopyBtn").onclick = async () => {
   }
 };
 
-console.log("myPrivateRoomIdCopyBtn直後到達");
-
 document.getElementById("privateHostCancelBtn").onclick = async () => {
   await quitWaitingForEntrace();
   showScreen("screen-private-match-choice");
 };
 
-console.log("privateHostCancelBtn直後到達");
-
 document.getElementById("privateGuestBtn").onclick = async () => {
   showScreen("screen-private-match-guest");
 };
-
-console.log("privateGuestBtn直後到達");
 
 document.getElementById("privateRoomIdInputConfirmBtn").onclick = async () => {
   const roomId = document.getElementById("privateRoomIdInput").value;
@@ -894,16 +877,10 @@ document.getElementById("privateRoomIdInputConfirmBtn").onclick = async () => {
   await joinByRoomId(roomId);
 };
 
-console.log("privateRoomIdInputConfirmBtn直後到達");
-
 document.getElementById("privateGuestCancelBtn").onclick = async () => {
   showScreen("screen-private-match-choice");
 };
 
-console.log("privateGuestCancelBtn直後到達");
-
 document.getElementById("privateCancelBtn").onclick = async () => {
   showScreen("screen-menu");
 };
-
-console.log("privateCancelBtn直後到達");
