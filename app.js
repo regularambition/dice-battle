@@ -753,6 +753,7 @@ async function createPrivateRoom() {
   });
 
   myPrivateRoomId = roomRef.id;
+  document.getElementById("myPrivateRoomId").textContent = myPrivateRoomId;
   startRoomListener("privateMatchHostWaitingNotification");
 }
 
@@ -764,10 +765,6 @@ async function quitWaitingForEntrace() {
     alert(`プライベートマッチ部屋を建てていません`);
     return;
   }
-  if (currentRoomId) {
-    alert(`既に入室が確定しています`);
-    return;
-  }
 
   const roomRef = getRoomRef(myPrivateRoomId);
 
@@ -777,6 +774,10 @@ async function quitWaitingForEntrace() {
 
       if (roomSnap.exists()) {
         const data = roomSnap.data();
+        if (data.state !== room_states.waiting_for_entrace) {
+          alert(`既に入室が確定しています`);
+          return;
+        }
         transaction.update(roomRef, {
           state: room_states.closed
         });
