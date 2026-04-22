@@ -813,7 +813,7 @@ async function joinByRoomId(roomId) {
         throw new Error("満員です");
       }
 
-      if (data.player1 === uid || data.player2 === uid) {
+      if (data.player1 === myUid || data.player2 === myUid) {
         console.log("既に入室済み");
         return;
       }
