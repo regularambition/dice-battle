@@ -424,7 +424,7 @@ async function joinQueue() {
       rematch: {},
       gameEndedAt: null,
       disconnectDetectedAt: null,
-      state: room_states.not_started_yet
+      state: room_states.preprocessing
     });
 
     // ⑤ waiting削除
@@ -480,50 +480,55 @@ function startRoomListener(notificationComponentId) {
   const roomQuery = query(
     collection(db, "rooms"),
     where("players", "array-contains", myUid),
-    where("state", "==", room_states.not_started_yet)
+    where("state", "==", room_states.waiting_for_entrace)
   );
 
   unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach(async (docSnap) => {
-      // ★ すでに入っているなら無視（重複防止）
-      if (currentRoomId) {
-        console.log("既に入室済みのためroomListenerが即座に終了しました");
-        return;
+      if (!currentRoomId) {
+        console.log("マッチ成立:", docSnap.id);
+        currentRoomId = docSnap.id;
+        updateDoc(doc(db, "users", myUid), {
+          currentRoomId: currentRoomId
+        });
       }
 
-      console.log("マッチ成立:", docSnap.id);
-
-      currentRoomId = docSnap.id;
-      updateDoc(doc(db, "users", myUid), {
-        currentRoomId: currentRoomId
-      });
-
-      // ★ waitingから削除（まだ残ってた場合）
-      if (myWaitingDocId) {
-        try {
-          await leaveQueue();
-        } catch (e) {
-          console.log("waiting削除失敗（問題なし）");
-        }
-        myWaitingDocId = null;
-      }
-
+      const data = docSnap.data();
+      console.log(`called onSnapshot in startRoomListener: state = ${data.state}`);
       const roomRef = getRoomRef(currentRoomId);
-      await syncServerTime();
+      if (data.state === room_states.waiting_for_entrace) {
+        if (myUid === data.player1 && data.player2 != null) {
+          await updateDoc(roomRef, {
+            state: room_states.preprocessing
+          });
+        }
+      } else if (data.state === room_states.preprocessing) {
+        // ★ waitingから削除（まだ残ってた場合）
+        if (myWaitingDocId) {
+          try {
+            await leaveQueue();
+          } catch (e) {
+            console.log("waiting削除失敗（問題なし）");
+          }
+          myWaitingDocId = null;
+        }
 
-      document.getElementById(notificationComponentId).textContent =
-        `相手が見つかりました。3秒後に対戦が始まります`;
-      await sleep(3000);
-      document.getElementById(notificationComponentId).textContent = ``;
+        await syncServerTime();
 
-      // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
-      startGameListener(currentRoomId);
+        document.getElementById(notificationComponentId).textContent =
+          `相手が見つかりました。3秒後に対戦が始まります`;
+        await sleep(3000);
+        document.getElementById(notificationComponentId).textContent = ``;
 
-      // ★ ゲーム画面へ
-      showScreen("screen-game");
+        // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
+        startGameListener(currentRoomId);
 
-      // ★ マッチ成立したら監視停止
-      stopRoomListener();
+        // ★ ゲーム画面へ
+        showScreen("screen-game");
+
+        // ★ マッチ成立したら監視停止
+        stopRoomListener();
+      }
     });
   });
 }
@@ -570,6 +575,8 @@ function startGameListener(roomId) {
     const data = docSnap.data();
     currentRoomData = data;
 
+    console.log(`called onSnapshot in startGameListener: state = ${data.state}`);
+
     // UI更新
     const opponentId = getOpponentIdFromRoomData(data);
     const opponentLastSeen = data.lastSeen?.[opponentId];
@@ -582,7 +589,7 @@ function startGameListener(roomId) {
     }
     document.getElementById("result").textContent = render(data);
 
-    if (data.state === room_states.not_started_yet) {
+    if (data.state === room_states.preprocessing) {
       if (data.lastSeen?.[myUid] != null && data.lastSeen?.[opponentId] != null) {
         console.log(`二人とも入室完了したためゲーム開始`);
 
@@ -742,7 +749,7 @@ async function createPrivateRoom() {
     rematch: {},
     gameEndedAt: null,
     disconnectDetectedAt: null,
-    state: room_states.not_started_yet
+    state: room_states.waiting_for_entrace
   });
 
   myPrivateRoomId = roomRef.id;
@@ -801,7 +808,7 @@ async function joinByRoomId(roomId) {
 
       const data = roomSnap.data();
 
-      if (data.player2) {
+      if (data.state !== room_states.waiting_for_entrace) {
         throw new Error("満員です");
       }
 
@@ -810,18 +817,13 @@ async function joinByRoomId(roomId) {
         return;
       }
 
-      if (data.state !== room_states.not_started_yet) {
-        throw new Error("既に開始済み");
-      }
-
       if (data.mode !== room_modes.private) {
         throw new Error("不正な部屋");
       }
 
       transaction.update(roomRef, {
         player2: myUid,
-        players: [data.player1, myUid],
-        state: room_states.playing
+        players: [data.player1, myUid]
       });
     });
 
