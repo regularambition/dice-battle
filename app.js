@@ -391,52 +391,76 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 async function joinQueue() {
-  // ① 自分を待機キューに追加
-  const docRef = await addDoc(collection(db, "waiting"), {
+  // ① 自分追加
+  const myDocRef = await addDoc(collection(db, "waiting"), {
     uid: myUid,
     createdAt: serverTimestamp()
   });
-  // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
-  myWaitingDocId = docRef.id;
+  myWaitingDocId = myDocRef.id;
 
-  // ② 待機キュー取得
-  const q = query(collection(db, "waiting"), orderBy("createdAt"));
+  // ② 自分より前の人を探す
+  const q = query(
+    collection(db, "waiting"),
+    orderBy("createdAt"),
+    limit(10)
+  );
+
   const snapshot = await getDocs(q);
 
-  // ③ 2人以上ならマッチング
-  if (snapshot.size >= 2) {
-    const users = snapshot.docs.slice(0, 2);
+  let opponentDoc = null;
 
-    const uid1 = users[0].data().uid;
-    const uid2 = users[1].data().uid;
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
 
-    // ④ room作成
-    const roomRef = await addDoc(collection(db, "rooms"), {
-      mode: room_modes.random,
-      participants: {
-        [uid1]: true,
-        [uid2]: true
-      },
-      player1: uid1,
-      player2: uid2,
-      player1Roll: null,
-      player2Roll: null,
-      lastSeen: {
-        [uid1]: null,
-        [uid2]: null
-      },
-      rematch: {},
-      gameEndedAt: null,
-      disconnectDetectedAt: null,
-      state: room_states.waiting_for_entrace
+    if (data.uid !== myUid) {
+      opponentDoc = docSnap;
+      break;
+    }
+  }
+
+  // ③ 相手がいればマッチ
+  if (opponentDoc) {
+    await runTransaction(db, async (tx) => {
+      const myDoc = await tx.get(myDocRef);
+      const oppDoc = await tx.get(opponentDoc.ref);
+
+      // 既に消されてたら中断
+      if (!myDoc.exists() || !oppDoc.exists()) {
+        return;
+      }
+
+      const uid1 = myUid;
+      const uid2 = oppDoc.data().uid;
+
+      // room作成
+      const roomCollectionRef = doc(collection(db, "rooms"));
+
+      tx.set(roomCollectionRef, {
+        mode: room_modes.random,
+        participants: {
+          [uid1]: true,
+          [uid2]: true
+        },
+        player1: uid1,
+        player2: uid2,
+        player1Roll: null,
+        player2Roll: null,
+        lastSeen: {
+          [uid1]: null,
+          [uid2]: null
+        },
+        rematch: {},
+        gameEndedAt: null,
+        disconnectDetectedAt: null,
+        state: room_states.waiting_for_entrace
+      });
+
+      // waiting削除
+      tx.delete(myDocRef);
+      tx.delete(opponentDoc.ref);
     });
 
-    // ⑤ waiting削除
-    for (const docSnap of users) {
-      await deleteDoc(doc(db, "waiting", docSnap.id));
-    }
-
-    console.log("マッチング成功:", roomRef.id);
+    console.log("マッチング成功");
   }
 }
 
