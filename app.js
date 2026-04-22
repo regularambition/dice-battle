@@ -479,7 +479,7 @@ function startRoomListener(notificationComponentId) {
 
   const roomQuery = query(
     collection(db, "rooms"),
-    where("players", "array-contains", myUid),
+    where(`participants.${myUid}`, "==", true),
     where("state", "==", room_states.waiting_for_entrace)
   );
 
@@ -740,7 +740,9 @@ async function stopGameListener(roomId, isRoomRemover) {
 async function createPrivateRoom() {
   const roomRef = await addDoc(collection(db, "rooms"), {
     mode: room_modes.private,
-    players: [myUid],
+    participants: {
+      [myUid]: true
+    },
     player1: myUid,
     player2: null,
     player1Roll: null,
@@ -824,7 +826,7 @@ async function joinByRoomId(roomId) {
 
       transaction.update(roomRef, {
         player2: myUid,
-        players: [data.player1, myUid]
+        [`participants.${myUid}`]: true
       });
     });
 
