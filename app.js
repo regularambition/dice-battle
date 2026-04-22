@@ -412,7 +412,11 @@ async function joinQueue() {
 
     // ④ room作成
     const roomRef = await addDoc(collection(db, "rooms"), {
-      players: [uid1, uid2],
+      mode: room_modes.random,
+      participants: {
+        [uid1]: true,
+        [uid2]: true
+      },
       player1: uid1,
       player2: uid2,
       player1Roll: null,
@@ -424,7 +428,7 @@ async function joinQueue() {
       rematch: {},
       gameEndedAt: null,
       disconnectDetectedAt: null,
-      state: room_states.preprocessing
+      state: room_states.waiting_for_entrace
     });
 
     // ⑤ waiting削除
@@ -442,7 +446,7 @@ async function leaveQueue() {
 
 document.getElementById("randomBtn").onclick = async () => {
   showScreen("screen-random-match-waiting");
-  startRoomListener("randomMatchWaitingNotification");
+  startRoomListener("randomMatchWaitingNotification", room_modes.random);
   await joinQueue();
 };
 
@@ -471,7 +475,7 @@ function getOpponentIdFromRoomData(roomData) {
   }
 }
 
-function startRoomListener(notificationComponentId) {
+function startRoomListener(notificationComponentId, mode_arg) {
   if (unsubscribeRoomListener) {
     return;
   }
@@ -480,6 +484,7 @@ function startRoomListener(notificationComponentId) {
   const roomQuery = query(
     collection(db, "rooms"),
     where(`participants.${myUid}`, "==", true),
+    where(`mode`, "==", mode_arg),
     where("state", "==", room_states.waiting_for_entrace)
   );
 
@@ -760,7 +765,7 @@ async function createPrivateRoom() {
 
   myPrivateRoomId = roomRef.id;
   document.getElementById("myPrivateRoomId").textContent = myPrivateRoomId;
-  startRoomListener("privateMatchHostWaitingNotification");
+  startRoomListener("privateMatchHostWaitingNotification", room_modes.private);
 }
 
 /**
@@ -769,6 +774,10 @@ async function createPrivateRoom() {
 async function quitWaitingForEntrace() {
   if (!myPrivateRoomId) {
     alert(`プライベートマッチ部屋を建てていません`);
+    return;
+  }
+  if (currentRoomData) {
+    alert(`既に入室が確定しています`);
     return;
   }
 
@@ -780,10 +789,6 @@ async function quitWaitingForEntrace() {
 
       if (roomSnap.exists()) {
         const data = roomSnap.data();
-        if (data.state !== room_states.waiting_for_entrace) {
-          alert(`既に入室が確定しています`);
-          return;
-        }
         transaction.update(roomRef, {
           state: room_states.closed
         });
@@ -803,6 +808,11 @@ async function quitWaitingForEntrace() {
  * ホストの建てたプライベートマッチ部屋のIDを入力して入る
  */
 async function joinByRoomId(roomId) {
+  if (currentRoomData) {
+    alert("既に入室済みです");
+    return;
+  }
+
   const roomRef = getRoomRef(roomId);
 
   try {
@@ -835,7 +845,7 @@ async function joinByRoomId(roomId) {
     });
 
     console.log("入室成功");
-    startRoomListener("privateMatchGuestWaitingNotification");
+    startRoomListener("privateMatchGuestWaitingNotification", room_modes.private);
 
   } catch (e) {
     alert(e.message);
