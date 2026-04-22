@@ -54,6 +54,32 @@
     </div>
   </div>
 
+  <!-- プライベートマッチ部屋作成・入室選択画面 -->
+  <div id="screen-private-match-choice" style="display:none;">
+    <h1>部屋を建てるか部屋に入るかを選択してください</h1>
+    <button id="privateHostBtn">自分が部屋を建てる</button>
+    <button id="privateGuestBtn">誰かの部屋に入る</button>
+    <button id="privateCancelBtn">マッチ形式選択へ戻る</button>
+  </div>
+
+  <!-- プライベートマッチ部屋作成選択後の画面 -->
+  <div id="screen-private-match-host" style="display:none;">
+    <h1>あなたの建てた部屋のIDは以下の通りです</h1>
+    <p id="myPrivateRoomId"></p>
+    <button id="myPrivateRoomIdCopyBtn">IDをクリップボードにコピー</button>
+    <button id="privateHostCancelBtn">入室受付をやめる</button>
+    <p id="privateMatchHostWaitingNotification"></p>
+  </div>
+
+  <!-- プライベートマッチ入室選択後の画面 -->
+  <div id="screen-private-match-guest" style="display:none;">
+    <h1>入る部屋のIDを入力してください</h1>
+    <input id="privateRoomIdInput" />
+    <button id="privateRoomIdInputConfirmBtn">このIDを与えられた部屋に入る</button>
+    <button id="privateGuestCancelBtn">やめる</button>
+    <p id="privateMatchGuestWaitingNotification"></p>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 

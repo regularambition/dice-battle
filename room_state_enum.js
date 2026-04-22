@@ -1,5 +1,6 @@
 export const room_states = Object.freeze({
-    not_started_yet: "not_started_yet",
+    waiting_for_entrace: "waiting_for_entrace",
+    preprocessing: "preprocessing",
     playing: "playing",
     rematch_wait: "rematch_wait",
     reconnect_wait: "reconnect_wait",
