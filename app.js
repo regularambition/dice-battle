@@ -486,7 +486,6 @@ function startRoomListener(notificationComponentId) {
   unsubscribeRoomListener = onSnapshot(roomQuery, async (snapshot) => {
     snapshot.forEach(async (docSnap) => {
       if (!currentRoomId) {
-        console.log("マッチ成立:", docSnap.id);
         currentRoomId = docSnap.id;
         updateDoc(doc(db, "users", myUid), {
           currentRoomId: currentRoomId
@@ -495,40 +494,39 @@ function startRoomListener(notificationComponentId) {
 
       const data = docSnap.data();
       console.log(`called onSnapshot in startRoomListener: state = ${data.state}`);
-      const roomRef = getRoomRef(currentRoomId);
-      if (data.state === room_states.waiting_for_entrace) {
-        if (myUid === data.player1 && data.player2 != null) {
-          await updateDoc(roomRef, {
-            state: room_states.preprocessing
-          });
-        }
-      } else if (data.state === room_states.preprocessing) {
-        // ★ waitingから削除（まだ残ってた場合）
-        if (myWaitingDocId) {
-          try {
-            await leaveQueue();
-          } catch (e) {
-            console.log("waiting削除失敗（問題なし）");
-          }
-          myWaitingDocId = null;
-        }
 
-        await syncServerTime();
-
-        document.getElementById(notificationComponentId).textContent =
-          `相手が見つかりました。3秒後に対戦が始まります`;
-        await sleep(3000);
-        document.getElementById(notificationComponentId).textContent = ``;
-
-        // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
-        startGameListener(currentRoomId);
-
-        // ★ ゲーム画面へ
-        showScreen("screen-game");
-
-        // ★ マッチ成立したら監視停止
-        stopRoomListener();
+      if (!data.player1 || !data.player2) {
+        console.log("まだ2人の参加者が揃っていません");
+        return;
       }
+
+      console.log("マッチ成立:", currentRoomId);
+
+      // ★ waitingから削除（まだ残ってた場合）
+      if (myWaitingDocId) {
+        try {
+          await leaveQueue();
+        } catch (e) {
+          console.log("waiting削除失敗（問題なし）");
+        }
+        myWaitingDocId = null;
+      }
+
+      await syncServerTime();
+
+      document.getElementById(notificationComponentId).textContent =
+        `相手が見つかりました。3秒後に対戦が始まります`;
+      await sleep(3000);
+      document.getElementById(notificationComponentId).textContent = ``;
+
+      // ★ マッチ成立したら監視停止
+      stopRoomListener();
+
+      // 入った部屋の情報を保持しているFirestoreドキュメントをリアルタイム監視
+      startGameListener(currentRoomId);
+
+      // ★ ゲーム画面へ
+      showScreen("screen-game");
     });
   });
 }
@@ -589,7 +587,13 @@ function startGameListener(roomId) {
     }
     document.getElementById("result").textContent = render(data);
 
-    if (data.state === room_states.preprocessing) {
+    if (data.state === room_states.waiting_for_entrace) {
+      if (myUid === data.player1) {
+        await updateDoc(roomRef, {
+          state: room_states.preprocessing
+        });
+      }
+    } else if (data.state === room_states.preprocessing) {
       if (data.lastSeen?.[myUid] != null && data.lastSeen?.[opponentId] != null) {
         console.log(`二人とも入室完了したためゲーム開始`);
 
