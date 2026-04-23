@@ -37,14 +37,19 @@
     <p id="randomMatchWaitingNotification"></p>
   </div>
 
-  <!-- ランダムマッチ対戦画面 -->
+  <!-- 対戦画面 -->
   <div id="screen-game" style="display:none;">
     <h2>ゲーム画面</h2>
     <div>Room: <span id="roomId"></span> </div>
-    <div>相手の名前：<span id="opponentName"></span> </div>
-    <button id="rollBtn">Roll!</button>
-    <div id="result"></div>
-    <div id="opponentConnectionNotification"></div>
+    <div>観戦者の数: <span id="spectatorCount"></span>人</div>
+    <div class="when_player">相手の名前：<span id="opponentName"></span> </div>
+    <div class="when_spectator">(P1の名前, P2の名前)：(<span id="player1Name"></span>, <span id="player2Name"></span>)</div>
+    <button class="when_player" id="rollBtn">Roll!</button>
+    <button class="when_spectator" id="quitSpectatingBtn">観戦をやめる</button>
+    <div class="when_player" id="result"></div>
+    <div class="when_player" id="opponentConnectionNotification"></div>
+    <div class="when_spectator" id="result_spectator"></div>
+    <div class="when_spectator" id="spectatorNotification"></div>
 
     <div id="rematchArea" style="display:none;">
       <p>同じ相手との再戦を希望しますか（残り<span id="rematchRemainingTime"></span>秒）</p>
@@ -54,11 +59,12 @@
     </div>
   </div>
 
-  <!-- プライベートマッチ部屋作成・入室選択画面 -->
+  <!-- プライベートマッチ部屋作成・入室・観戦選択画面 -->
   <div id="screen-private-match-choice" style="display:none;">
     <h1>部屋を建てるか部屋に入るかを選択してください</h1>
     <button id="privateHostBtn">自分が部屋を建てる</button>
     <button id="privateGuestBtn">誰かの部屋に入る</button>
+    <button id="privateSpectateBtn">観戦する</button>
     <button id="privateCancelBtn">マッチ形式選択へ戻る</button>
   </div>
 
@@ -78,6 +84,15 @@
     <button id="privateRoomIdInputConfirmBtn">このIDを与えられた部屋に入る</button>
     <button id="privateGuestCancelBtn">やめる</button>
     <p id="privateMatchGuestWaitingNotification"></p>
+  </div>
+
+  <!-- プライベートマッチ観戦選択後の画面 -->
+  <div id="screen-private-match-spectator" style="display:none;">
+    <h1>観戦する部屋のIDを入力してください</h1>
+    <input id="spectatedRoomIdInput" />
+    <button id="spectatedRoomIdInputConfirmBtn">このIDを与えられた部屋を観戦する</button>
+    <button id="spectateCancelBtn">やめる</button>
+    <p id="privateMatchSpectatorWaitingNotification"></p>
   </div>
 
   <script type="module" src="app.js"></script>

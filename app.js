@@ -2,6 +2,7 @@
 import { db, auth } from "./firebase.js";
 import { room_states } from "./room_state_enum.js";
 import { room_modes } from "./room_mode_enum.js";
+import { participant_roles } from "./participant_role_enum.js";
 import {
   doc,
   updateDoc,
@@ -32,6 +33,7 @@ let myWaitingDocId = null;
 let currentRoomId = null;
 let unsubscribeRoomListener = null;
 let unsubscribeGameListener = null;
+let unsubscribeSpectatingListener = null;
 let isRematchChoiceFixed = true;
 let heartBeatId = null;
 let displayRematchUiId = null;
@@ -147,7 +149,8 @@ function displayRematchUi() {
 function showScreen(screenId) {
   const screens = [
     "screen-title", "screen-name", "screen-menu", "screen-random-match-waiting", "screen-game",
-    "screen-private-match-choice", "screen-private-match-host", "screen-private-match-guest"
+    "screen-private-match-choice", "screen-private-match-host", "screen-private-match-guest",
+    "screen-private-match-spectator"
   ];
 
   screens.forEach(id => {
@@ -224,23 +227,29 @@ function get_result_msg(myRoll, opponentRoll) {
   }
 }
 
-function render(data) {
-  const myRoll = (data.player1 === myUid) ? data.player1Roll : data.player2Roll;
-  const opponentRoll = (data.player1 === myUid) ? data.player2Roll : data.player1Roll;
-  const opponentName = document.getElementById("opponentName").textContent;
+function render(data, isPlayer) {
+  if (isPlayer) {
+    const myRoll = (data.player1 === myUid) ? data.player1Roll : data.player2Roll;
+    const opponentRoll = (data.player1 === myUid) ? data.player2Roll : data.player1Roll;
+    const opponentName = document.getElementById("opponentName").textContent;
 
-  if (myRoll != null && opponentRoll != null) {
-    const rematchArea = document.getElementById("rematchArea");
-    if (rematchArea.style.display === "none") {
-      isRematchChoiceFixed = false;
-      rematchArea.style.display = "block";
-      console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
+    if (myRoll != null && opponentRoll != null) {
+      const rematchArea = document.getElementById("rematchArea");
+      if (rematchArea.style.display === "none") {
+        isRematchChoiceFixed = false;
+        rematchArea.style.display = "block";
+        console.log("再戦希望選択部分を表示しました（最初の1回のみ実行されるはず）");
+      }
+
+      const result = get_result_msg(myRoll, opponentRoll);
+      return `you: ${myRoll}, ${opponentName}: ${opponentRoll} -> ${result}`;
+    } else {
+      return `you: ${myRoll ?? "waiting"}, ${opponentName}: ${opponentRoll ?? "waiting"}`;
     }
-
-    const result = get_result_msg(myRoll, opponentRoll);
-    return `you: ${myRoll}, ${opponentName}: ${opponentRoll} -> ${result}`;
   } else {
-    return `you: ${myRoll ?? "waiting"}, ${opponentName}: ${opponentRoll ?? "waiting"}`;
+    const p1Name = document.getElementById("player1Name").textContent;
+    const p2Name = document.getElementById("player2Name").textContent;
+    return `${p1Name}: ${data.player1Roll ?? "waiting"}, ${p2Name}: ${data.player2Roll ?? "waiting"}`;
   }
 }
 
@@ -440,8 +449,8 @@ async function joinQueue() {
       tx.set(roomCollectionRef, {
         mode: room_modes.random,
         participants: {
-          [uid1]: true,
-          [uid2]: true
+          [uid1]: participant_roles.player,
+          [uid2]: participant_roles.player
         },
         player1: uid1,
         player2: uid2,
@@ -477,6 +486,18 @@ document.getElementById("randomBtn").onclick = async () => {
   await joinQueue();
 };
 
+function initializeVisibilityInGameScreen(isPlayer) {
+  const el_player = document.getElementsByClassName("when_player");
+  for (const el of el_player) {
+    el.style.display = isPlayer ? "" : "none";
+  }
+
+  const el_spectator = document.getElementsByClassName("when_spectator");
+  for (const el of el_spectator) {
+    el.style.display = !isPlayer ? "" : "none";
+  }
+}
+
 document.getElementById("randomMatchCancelBtn").onclick = async () => {
   if (!myWaitingDocId) {
     alert("マッチング相手待機状態ではありません");
@@ -510,7 +531,7 @@ function startRoomListener(notificationComponentId, mode_arg) {
 
   const roomQuery = query(
     collection(db, "rooms"),
-    where(`participants.${myUid}`, "==", true),
+    where(`participants.${myUid}`, "==", participant_roles.player),
     where(`mode`, "==", mode_arg),
     where("state", "==", room_states.waiting_for_entrace)
   );
@@ -558,6 +579,7 @@ function startRoomListener(notificationComponentId, mode_arg) {
       startGameListener(currentRoomId);
 
       // ★ ゲーム画面へ
+      initializeVisibilityInGameScreen(true);
       showScreen("screen-game");
     });
   });
@@ -636,7 +658,7 @@ function startGameListener(roomId) {
 
       console.log("roomId, opponentNameのUI表示完了（最初の1回のみ実行されるはず）");
     }
-    document.getElementById("result").textContent = render(data);
+    document.getElementById("result").textContent = render(data, true);
 
     if (data.state === room_states.waiting_for_entrace) {
       if (myUid === data.player1) {
@@ -794,7 +816,7 @@ async function createPrivateRoom() {
   const roomRef = await addDoc(collection(db, "rooms"), {
     mode: room_modes.private,
     participants: {
-      [myUid]: true
+      [myUid]: participant_roles.player
     },
     player1: myUid,
     player2: null,
@@ -885,7 +907,7 @@ async function joinByRoomId(roomId) {
 
       transaction.update(roomRef, {
         player2: myUid,
-        [`participants.${myUid}`]: true
+        [`participants.${myUid}`]: participant_roles.player
       });
     });
 
@@ -946,5 +968,112 @@ document.getElementById("privateGuestCancelBtn").onclick = async () => {
 };
 
 document.getElementById("privateCancelBtn").onclick = async () => {
+  showScreen("screen-menu");
+};
+
+document.getElementById("privateSpectateBtn").onclick = async () => {
+  showScreen("screen-private-match-spectator");
+};
+
+document.getElementById("spectatedRoomIdInputConfirmBtn").onclick = async () => {
+  const roomId = document.getElementById("spectatedRoomIdInput").value;
+  if (!regex.test(roomId)) {
+    alert("大文字・小文字・アラビア数字のみが利用できます");
+    return;
+  }
+  await joinAsSpectator(roomId);
+};
+
+document.getElementById("spectateCancelBtn").onclick = async () => {
+  showScreen("screen-private-match-choice");
+};
+
+/**
+ * 観戦したいプライベートマッチ部屋のIDを入力して入る
+ */
+async function joinAsSpectator(roomId) {
+  const roomRef = getRoomRef(roomId);
+  const roomDoc = getDoc(roomRef);
+  if (!roomDoc.exists()) {
+    alert("存在しない部屋です");
+    return;
+  }
+
+  const data = roomDoc.data();
+  if (data.mode !== room_modes.private) {
+    alert("不正な部屋です");
+    return;
+  }
+  if (data.state !== room_states.closed) {
+    alert("試合終了後の部屋です");
+    return;
+  }
+
+  await updateDoc(roomRef, {
+    [`participants.${myUid}`]: participant_roles.spectator
+  });
+
+  startSpectatingListener(roomId);
+  initializeVisibilityInGameScreen(false);
+  showScreen("screen-game");
+}
+
+function startSpectatingListener(roomId) {
+  if (unsubscribeSpectatingListener) {
+    return;
+  }
+  console.log("spectatingListener起動成功");
+  const roomRef = getRoomRef(roomId);
+  currentRoomId = roomId;
+  unsubscribeSpectatingListener = onSnapshot(roomRef, async (docSnap) => {
+    const data = docSnap.data();
+    currentRoomData = data;
+
+    console.log(`called onSnapshot in startSpectatingListener: state = ${data.state}`);
+
+    if (document.getElementById("player1Name").textContent == "" && data.player1) {
+      const p1Doc = fetchUserDocByUid(data.player1);
+      document.getElementById("player1Name").textContent = p1Doc.data().name;
+    }
+    if (document.getElementById("player2Name").textContent == "" && data.player2) {
+      const p2Doc = fetchUserDocByUid(data.player2);
+      document.getElementById("player2Name").textContent = p2Doc.data().name;
+    }
+
+    document.getElementById("spectatorCount").textContent = data.participants.length - 2;
+
+    if (data.state === room_states.waiting_for_entrace || data.state === room_states.preprocessing) {
+      document.getElementById("spectatorNotification").textContent = "事前処理中です";
+    } else if (data.state === room_states.playing) {
+      document.getElementById("spectatorNotification").textContent = "";
+      document.getElementById("result_spectator").textContent = render(data, false);
+    } else if (data.state === room_states.reconnect_wait) {
+      document.getElementById("spectatorNotification").textContent = "通信が切断されたため再接続を待っています";
+    } else if (data.state === room_states.rematch_wait) {
+      document.getElementById("spectatorNotification").textContent = "再戦希望選択を待っています";
+    } else if (data.state === room_states.closed) {
+      stopSpectatingListener();
+      currentRoomId = null;
+      showScreen("screen-menu");
+    }
+  });
+}
+
+function stopSpectatingListener() {
+  document.getElementById("player1Name").textContent = "";
+  document.getElementById("player2Name").textContent = "";
+  if (unsubscribeSpectatingListener) {
+    unsubscribeSpectatingListener();
+    unsubscribeSpectatingListener = null;
+  }
+}
+
+document.getElementById("quitSpectatingBtn").onclick = async () => {
+  stopSpectatingListener();
+  const roomRef = getRoomRef(currentRoomId);
+  await updateDoc(roomRef, {
+    [`participants.${myUid}`]: deleteField()
+  });
+  currentRoomId = null;
   showScreen("screen-menu");
 };
