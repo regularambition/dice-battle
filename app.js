@@ -48,6 +48,7 @@ const disconnectionIntervalMilliSec = 10000;
 const rematchDurationMilliSec = 20000;
 const rematchRemainingTimeIntervalMilliSec = 1000;
 const reconnectDurationMilliSec = 15000;
+const matchPreprocessGraceMilliSec = 30000;
 
 function cannotCallToMillis(arg) {
   return !arg || !arg.toMillis;
@@ -453,7 +454,8 @@ async function joinQueue() {
         rematch: {},
         gameEndedAt: null,
         disconnectDetectedAt: null,
-        state: room_states.waiting_for_entrace
+        state: room_states.waiting_for_entrace,
+        createdAt: serverTimestamp()
       });
 
       // waiting削除
@@ -592,6 +594,17 @@ function mustEndRematchGracePeriod(gameEndedAt) {
   return getNow() - geat >= rematchDurationMilliSec;
 }
 
+/**
+ * 試合画面に遷移してから一定時間が経過しても事前処理が終わらない場合にtrue
+ */
+function mustEndMatchPreprocessGracePeriod(createdAt) {
+  if (cannotCallToMillis(createdAt)) {
+    return false;
+  }
+
+  return getNow() - createdAt.toMillis() >= matchPreprocessGraceMilliSec;
+}
+
 function startGameListener(roomId) {
   if (unsubscribeGameListener) {
     return;
@@ -604,6 +617,14 @@ function startGameListener(roomId) {
     currentRoomData = data;
 
     console.log(`called onSnapshot in startGameListener: state = ${data.state}`);
+
+    // 試合画面に遷移して一定時間が経過しても事前準備処理が終わらない場合強制解散
+    if (data.state === room_states.waiting_for_entrace || data.state === room_states.preprocessing) {
+      if (mustEndMatchPreprocessGracePeriod(data.createdAt)) {
+        await bye(roomId, true);
+        return;
+      }
+    }
 
     // UI更新
     const opponentId = getOpponentIdFromRoomData(data);
@@ -783,7 +804,8 @@ async function createPrivateRoom() {
     rematch: {},
     gameEndedAt: null,
     disconnectDetectedAt: null,
-    state: room_states.waiting_for_entrace
+    state: room_states.waiting_for_entrace,
+    createdAt: serverTimestamp()
   });
 
   myPrivateRoomId = roomRef.id;
