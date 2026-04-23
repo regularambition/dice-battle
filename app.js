@@ -14,6 +14,7 @@ import {
   getDocs,
   query,
   orderBy,
+  limit,
   deleteDoc,
   serverTimestamp,
   runTransaction
@@ -47,6 +48,7 @@ const disconnectionIntervalMilliSec = 10000;
 const rematchDurationMilliSec = 20000;
 const rematchRemainingTimeIntervalMilliSec = 1000;
 const reconnectDurationMilliSec = 15000;
+const matchPreprocessGraceMilliSec = 30000;
 
 function cannotCallToMillis(arg) {
   return !arg || !arg.toMillis;
@@ -391,52 +393,77 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 async function joinQueue() {
-  // ① 自分を待機キューに追加
-  const docRef = await addDoc(collection(db, "waiting"), {
+  // ① 自分追加
+  const myDocRef = await addDoc(collection(db, "waiting"), {
     uid: myUid,
     createdAt: serverTimestamp()
   });
-  // 待機キュー内において自分のUIDを保持しているドキュメントIDを保持
-  myWaitingDocId = docRef.id;
+  myWaitingDocId = myDocRef.id;
 
-  // ② 待機キュー取得
-  const q = query(collection(db, "waiting"), orderBy("createdAt"));
+  // ② 自分より前の人を探す
+  const q = query(
+    collection(db, "waiting"),
+    orderBy("createdAt"),
+    limit(10)
+  );
+
   const snapshot = await getDocs(q);
 
-  // ③ 2人以上ならマッチング
-  if (snapshot.size >= 2) {
-    const users = snapshot.docs.slice(0, 2);
+  let opponentDoc = null;
 
-    const uid1 = users[0].data().uid;
-    const uid2 = users[1].data().uid;
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
 
-    // ④ room作成
-    const roomRef = await addDoc(collection(db, "rooms"), {
-      mode: room_modes.random,
-      participants: {
-        [uid1]: true,
-        [uid2]: true
-      },
-      player1: uid1,
-      player2: uid2,
-      player1Roll: null,
-      player2Roll: null,
-      lastSeen: {
-        [uid1]: null,
-        [uid2]: null
-      },
-      rematch: {},
-      gameEndedAt: null,
-      disconnectDetectedAt: null,
-      state: room_states.waiting_for_entrace
+    if (data.uid !== myUid) {
+      opponentDoc = docSnap;
+      break;
+    }
+  }
+
+  // ③ 相手がいればマッチ
+  if (opponentDoc) {
+    await runTransaction(db, async (tx) => {
+      const myDoc = await tx.get(myDocRef);
+      const oppDoc = await tx.get(opponentDoc.ref);
+
+      // 既に消されてたら中断
+      if (!myDoc.exists() || !oppDoc.exists()) {
+        return;
+      }
+
+      const uid1 = myUid;
+      const uid2 = oppDoc.data().uid;
+
+      // room作成
+      const roomCollectionRef = doc(collection(db, "rooms"));
+
+      tx.set(roomCollectionRef, {
+        mode: room_modes.random,
+        participants: {
+          [uid1]: true,
+          [uid2]: true
+        },
+        player1: uid1,
+        player2: uid2,
+        player1Roll: null,
+        player2Roll: null,
+        lastSeen: {
+          [uid1]: null,
+          [uid2]: null
+        },
+        rematch: {},
+        gameEndedAt: null,
+        disconnectDetectedAt: null,
+        state: room_states.waiting_for_entrace,
+        createdAt: serverTimestamp()
+      });
+
+      // waiting削除
+      tx.delete(myDocRef);
+      tx.delete(opponentDoc.ref);
     });
 
-    // ⑤ waiting削除
-    for (const docSnap of users) {
-      await deleteDoc(doc(db, "waiting", docSnap.id));
-    }
-
-    console.log("マッチング成功:", roomRef.id);
+    console.log("マッチング成功");
   }
 }
 
@@ -567,6 +594,17 @@ function mustEndRematchGracePeriod(gameEndedAt) {
   return getNow() - geat >= rematchDurationMilliSec;
 }
 
+/**
+ * 試合画面に遷移してから一定時間が経過しても事前処理が終わらない場合にtrue
+ */
+function mustEndMatchPreprocessGracePeriod(createdAt) {
+  if (cannotCallToMillis(createdAt)) {
+    return false;
+  }
+
+  return getNow() - createdAt.toMillis() >= matchPreprocessGraceMilliSec;
+}
+
 function startGameListener(roomId) {
   if (unsubscribeGameListener) {
     return;
@@ -579,6 +617,14 @@ function startGameListener(roomId) {
     currentRoomData = data;
 
     console.log(`called onSnapshot in startGameListener: state = ${data.state}`);
+
+    // 試合画面に遷移して一定時間が経過しても事前準備処理が終わらない場合強制解散
+    if (data.state === room_states.waiting_for_entrace || data.state === room_states.preprocessing) {
+      if (mustEndMatchPreprocessGracePeriod(data.createdAt)) {
+        await bye(roomId, true);
+        return;
+      }
+    }
 
     // UI更新
     const opponentId = getOpponentIdFromRoomData(data);
@@ -634,15 +680,14 @@ function startGameListener(roomId) {
       }
       if (mustEndReconnectionGracePeriod(data.disconnectDetectedAt)) {
         console.log("切断後の再接続期限切れのため強制解散");
-        currentRoomData.player1 = myUid;
-        await bye(roomId, currentRoomData);
+        await bye(roomId, true);
         return;
       }
     } else if (data.state === room_states.rematch_wait) {
       if (mustEndRematchGracePeriod(data.gameEndedAt)) {
         // 選択肢が表示されてから一定時間が経過すると強制解散
         console.log("再戦希望選択時間切れのため強制解散");
-        await bye(roomId, data);
+        await bye(roomId, myUid === data.player1);
         return;
       }
 
@@ -657,7 +702,7 @@ function startGameListener(roomId) {
       if (myChoice == null) {
         if (opponentChoice === false) {
           // 解散
-          await bye(roomId, data);
+          await bye(roomId, myUid === data.player1);
         } else {
           console.log("まだ二人の再戦選択が揃っていません");
         }
@@ -685,15 +730,14 @@ function startGameListener(roomId) {
           document.getElementById("rematchArea").style.display = "none";
         } else {
           // 解散
-          await bye(roomId, data);
+          await bye(roomId, myUid === data.player1);
         }
       } else {
         // 解散
-        await bye(roomId, data);
+        await bye(roomId, myUid === data.player1);
       }
     } else if (data.state === room_states.closed) {
-      currentRoomData.player1 = "";
-      await bye(roomId, currentRoomData);
+      await bye(roomId, false);
     }
   });
 
@@ -702,7 +746,7 @@ function startGameListener(roomId) {
 }
 
 // 解散処理
-async function bye(roomId, roomData) {
+async function bye(roomId, isRoomRemover) {
   isRematchChoiceFixed = true;
   await updateDoc(doc(db, "users", myUid), {
     currentRoomId: null
@@ -713,7 +757,7 @@ async function bye(roomId, roomData) {
   heartBeatId = null;
   displayRematchUiId = null;
 
-  await stopGameListener(roomId, (myUid === roomData.player1));
+  await stopGameListener(roomId, isRoomRemover);
   document.getElementById("rematchStatus").textContent =
     `試合が終了したため3秒後にメニュー画面へ戻ります`;
   await sleep(3000);
@@ -760,7 +804,8 @@ async function createPrivateRoom() {
     rematch: {},
     gameEndedAt: null,
     disconnectDetectedAt: null,
-    state: room_states.waiting_for_entrace
+    state: room_states.waiting_for_entrace,
+    createdAt: serverTimestamp()
   });
 
   myPrivateRoomId = roomRef.id;
