@@ -659,15 +659,14 @@ function startGameListener(roomId) {
       }
       if (mustEndReconnectionGracePeriod(data.disconnectDetectedAt)) {
         console.log("切断後の再接続期限切れのため強制解散");
-        currentRoomData.player1 = myUid;
-        await bye(roomId, currentRoomData);
+        await bye(roomId, true);
         return;
       }
     } else if (data.state === room_states.rematch_wait) {
       if (mustEndRematchGracePeriod(data.gameEndedAt)) {
         // 選択肢が表示されてから一定時間が経過すると強制解散
         console.log("再戦希望選択時間切れのため強制解散");
-        await bye(roomId, data);
+        await bye(roomId, myUid === data.player1);
         return;
       }
 
@@ -682,7 +681,7 @@ function startGameListener(roomId) {
       if (myChoice == null) {
         if (opponentChoice === false) {
           // 解散
-          await bye(roomId, data);
+          await bye(roomId, myUid === data.player1);
         } else {
           console.log("まだ二人の再戦選択が揃っていません");
         }
@@ -710,15 +709,14 @@ function startGameListener(roomId) {
           document.getElementById("rematchArea").style.display = "none";
         } else {
           // 解散
-          await bye(roomId, data);
+          await bye(roomId, myUid === data.player1);
         }
       } else {
         // 解散
-        await bye(roomId, data);
+        await bye(roomId, myUid === data.player1);
       }
     } else if (data.state === room_states.closed) {
-      currentRoomData.player1 = "";
-      await bye(roomId, currentRoomData);
+      await bye(roomId, false);
     }
   });
 
@@ -727,7 +725,7 @@ function startGameListener(roomId) {
 }
 
 // 解散処理
-async function bye(roomId, roomData) {
+async function bye(roomId, isRoomRemover) {
   isRematchChoiceFixed = true;
   await updateDoc(doc(db, "users", myUid), {
     currentRoomId: null
@@ -738,7 +736,7 @@ async function bye(roomId, roomData) {
   heartBeatId = null;
   displayRematchUiId = null;
 
-  await stopGameListener(roomId, (myUid === roomData.player1));
+  await stopGameListener(roomId, isRoomRemover);
   document.getElementById("rematchStatus").textContent =
     `試合が終了したため3秒後にメニュー画面へ戻ります`;
   await sleep(3000);
